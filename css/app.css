@@ -435,6 +435,59 @@ button.link:hover { text-decoration: underline; }
 
 #toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 60; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 12px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 
+/* section portal: navigation, home (hub), prayer, adhkar */
+.pnav { display: flex; gap: 4px; flex-wrap: wrap; }
+.pnav .btn { text-decoration: none; padding-inline: .8em; }
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.hub-card { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 26px 18px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); color: var(--ink); text-decoration: none; min-height: 210px; align-content: center; transition: transform .12s, border-color .12s; }
+.hub-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.hub-ico { font-size: 3.4rem; line-height: 1; }
+.hub-card b { font-family: var(--f-display); font-size: 1.9rem; color: var(--accent); }
+.hub-st { font-size: 1.05rem; color: var(--muted); }
+.hub-st.ok { color: var(--ok); font-weight: 700; }
+.hub-st.warn { color: var(--warn); font-weight: 700; }
+.pr-card { max-width: 820px; gap: 16px; }
+.pr-date { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pr-date input { min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; font: inherit; background: var(--surface); color: var(--ink); }
+.pr-saved { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; font-weight: 600; }
+.pr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+.pr-box { display: grid; gap: 10px; justify-items: center; align-content: start; text-align: center; background: var(--surface-2); border-radius: 16px; padding: 16px; }
+.pr-box label { font-weight: 700; font-size: 1.1rem; }
+.pr-step { display: flex; align-items: center; gap: 14px; }
+.pr-step button { width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); font-size: 2.2rem; font-weight: 700; color: var(--ink); cursor: pointer; }
+.pr-step input { width: 3.2ch; font-family: var(--f-display); font-size: 3.6rem; text-align: center; border: 0; background: none; color: var(--accent); -moz-appearance: textfield; }
+.pr-step input::-webkit-outer-spin-button, .pr-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pr-pct { font-size: 1.3rem; text-align: center; min-height: 1.6em; }
+.pr-save { min-height: 58px; font-size: 1.2rem; }
+.pr-bars { display: flex; gap: 14px; align-items: end; height: 170px; padding-top: 10px; }
+.pr-col { flex: 1; display: grid; grid-template-rows: auto 1fr auto; justify-items: center; gap: 4px; height: 100%; }
+.pr-col i { width: 60%; max-width: 54px; align-self: end; background: var(--accent); border-radius: 8px 8px 0 0; }
+.pr-col.cur i { background: var(--gold); }
+.pr-col small { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.adh-screen { height: 100%; }
+.adh-body { display: grid; grid-template-rows: auto auto 1fr auto auto auto; gap: 12px; padding: 14px max(14px, 3vw) 20px; min-height: 0; overflow: auto; }
+.adh-top { display: flex; gap: 14px; align-items: center; justify-content: center; font-size: 1.2rem; flex-wrap: wrap; }
+.adh-prog { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.adh-prog i { display: block; height: 100%; background: var(--gold); transition: width .3s; }
+.adh-main { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: stretch; min-height: 0; }
+.adh-arrow { width: 72px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+.adh-arrow[disabled] { opacity: .3; cursor: default; }
+.adh-arrow .icon { width: 36px; height: 36px; }
+.adh-card { border: 3px solid var(--gold); border-radius: 22px; background: var(--paper); color: var(--paper-ink); padding: clamp(16px, 3vw, 40px); cursor: pointer; display: grid; place-items: center; overflow: auto; min-height: 240px; font: inherit; }
+.adh-text { font-family: "Amiri", var(--f-quran); font-size: clamp(1.7rem, 3.3vw, 3.1rem); line-height: 2; text-align: center; }
+.adh-count { display: flex; gap: 14px; align-items: center; justify-content: center; }
+.adh-n { font-family: var(--f-display); font-size: 2.4rem; color: var(--accent); }
+.adh-meta { font-size: .95rem; color: var(--muted); text-align: center; max-width: 900px; justify-self: center; }
+.adh-meta details { margin-top: 4px; }
+.adh-finish { display: grid; gap: 10px; justify-items: center; }
+.adh-finish .btn { min-height: 58px; font-size: 1.25rem; padding-inline: 34px; }
+.adm-dh textarea, .adm-dh input:not([type=checkbox]) { width: 100%; font: inherit; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface); color: var(--ink); }
+.adm-dh-text { font-family: "Amiri", var(--f-quran); font-size: 1.25rem; line-height: 1.9; }
+.adm-dh.off { opacity: .55; }
+.trk-pa { display: block; font-size: .72rem; font-weight: 600; opacity: .85; }
+.cert .c-parts { font-size: 1.9cqw; color: #4a5a55; }
+@media (max-width: 700px) { .adh-main { grid-template-columns: 1fr; } .adh-arrow { display: none; } }
+
 /* smart boards (large screens): bigger text so the back of the class can read it; laptops and tablets are unchanged */
 @media (min-width: 1500px) and (min-height: 800px) {
   html { font-size: 19px; }

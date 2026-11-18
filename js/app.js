@@ -152,6 +152,8 @@ async function boot() {
     S.notes = boot.notes || {};
     S.settings = boot.settings || {};
     S.progress = boot.progress || [];
+    S.prayer = boot.prayer || [];
+    S.adhkar = boot.adhkar || [];
   } catch (e) {
     app().innerHTML = `<div class="landing"><div></div><div class="picker"><h2>تعذّر تحميل الموقع</h2><p>${esc(e.userMessage || 'تأكدي من الاتصال بالإنترنت ثم أعيدي تحميل الصفحة.')}</p><button class="btn primary" onclick="location.reload()">إعادة المحاولة</button></div><div></div></div>`;
     return;
@@ -159,8 +161,11 @@ async function boot() {
   S.admin = store.sget('iqra-admin', null);
   S.sec = store.sget('iqra-sec', {});
   Player.reciter = store.get('iqra-reciter', S.settings.reciter || RECITERS[0].id);
+  // a direct link (#/7/b/quran) wins; otherwise this device opens its section's home
   const last = store.get('iqra-last', null);
-  if (last && SECTIONS.some(s => s.id === last)) openLesson(last); else home();
+  if (parseRoute()) router();
+  else if (last && SECTIONS.some(s => s.id === last)) { history.replaceState(null, '', routeOf(last)); router(); }
+  else home();
 }
 
 function logoSVG(cls = 'brand-mark') {
@@ -178,7 +183,8 @@ function frame(inner, crumbs) {
   app().querySelector('[data-go=admin]').onclick = () => admin();
 }
 function home() {
-  Player.stop(true);
+  Player.stop(true); S.lesson = null;
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   const last = store.get('iqra-last', null);
   frame(`<h2>أهلاً بكِ.. اختاري القسم</h2>
     ${last ? `<button class="btn primary" data-last style="justify-self:start;font-size:1.15rem;min-height:54px">متابعة صف ${esc(sectionName(last))}</button>` : ''}
@@ -187,7 +193,7 @@ function home() {
       <button class="choice big" data-d="sec"><b>القسم الثانوي</b><small>من الصف السادس إلى التوجيهي</small></button>
     </div>`);
   app().querySelectorAll('[data-d]').forEach(b => b.onclick = () => grades(b.dataset.d));
-  const lb = app().querySelector('[data-last]'); if (lb) lb.onclick = () => openLesson(last);
+  const lb = app().querySelector('[data-last]'); if (lb) lb.onclick = () => go(last);
 }
 function grades(dept) {
   const gs = GRADES.filter(g => g.dept === dept);
@@ -202,7 +208,7 @@ function sections(grade) {
   const g = gradeOf(grade);
   frame(`<h2>${esc(g.name)}.. اختاري الشعبة</h2><div class="choice-grid">${LETTERS.map(l => `<button class="choice section" data-s="${grade}-${l}"><b>${l}</b><small>شعبة ${l}</small></button>`).join('')}</div>`,
     `<button data-h>الرئيسية</button> › <button data-d>${g.dept === 'basic' ? 'القسم الأساسي' : 'القسم الثانوي'}</button> › <span>${esc(g.name)}</span>`);
-  app().querySelectorAll('[data-s]').forEach(b => b.onclick = () => openLesson(b.dataset.s));
+  app().querySelectorAll('[data-s]').forEach(b => b.onclick = () => go(b.dataset.s));
   app().querySelector('[data-h]').onclick = home;
   app().querySelector('[data-d]').onclick = () => grades(g.dept);
 }
@@ -286,6 +292,7 @@ function renderLesson() {
   app().innerHTML = `<div class="lesson">
     <div class="bar">
       <div class="who">${logoSVG()}<span class="chip">${esc(sectionName(L.sectionId))}</span></div>
+      ${portalNav(L.sectionId, 'quran')}
       ${when}
       <div class="actions">
         ${doneBtn}
@@ -794,31 +801,37 @@ function board(grade) {
   const months = monthsOf(grade);
   const cur = monthKey(todayISO());
   let mk = months.includes(cur) ? cur : months.filter(m => m <= cur).pop() || months[0];
+  // the monthly score out of 100: Quran (sabr errors) + Dhuhr prayer + morning adhkar
   const draw = () => {
-    const st = standings(grade, mk);
-    const max = Math.max(1, ...st.rows.map(r => r.total));
+    const st = monthScores(grade, mk); const W = st.W;
     const winners = st.rows.filter(r => r.winner);
     const late = st.rows.filter(r => r.late > 0);
+    const part = (v, has) => has ? `<span class="num">${toAr(Math.round(v))}</span>` : '<span class="muted">—</span>';
     $('#board-body').innerHTML = `
-      ${late.length ? `<div class="warn-box">شعب لم تُسجّل كل أيامها بعد: ${late.map(r => `${r.letter} (${toAr(r.late)})`).join('، ')}. الترتيب يُحسب من الأيام المسجّلة.</div>` : ''}
-      <div class="bars">${st.rows.map(r => `<div class="barrow ${r.winner ? 'best' : ''}"><b class="rank">${r.letter}</b><div class="track"><div class="fill" style="width:${r.recorded ? Math.max(3, r.total / max * 100) : 0}%"></div></div><span class="num">${r.recorded ? toAr(r.total) : '—'}</span></div>`).join('')}</div>
-      <div class="table-wrap"><table><thead><tr><th>الترتيب</th><th>الشعبة</th><th>مجموع الأخطاء</th><th>الأيام المسجّلة</th><th>الحالة</th><th></th></tr></thead><tbody>
-      ${st.rows.map(r => `<tr class="${r.winner ? 'winner' : ''}"><td class="rank">${r.rank ? toAr(r.rank) : '—'}</td><td><b>${esc(gradeOf(grade).name)} ${r.letter}</b></td><td class="num">${r.recorded ? toAr(r.total) : '—'}</td>
-        <td class="num">${toAr(r.recorded)} من ${toAr(r.due)}</td><td>${r.late ? `<span class="st late">متأخرة ${toAr(r.late)}</span>` : r.recorded ? '<span class="st done">مكتملة</span>' : '<span class="st soon">لا تسجيل</span>'}</td>
+      <p class="muted" style="margin:0">المجموع من ١٠٠: القرآن ${toAr(W.quran)}٪ (أخطاء السبر) · الصلاة ${toAr(W.prayer)}٪ (صلاة الظهر جماعة) · الأذكار ${toAr(W.adhkar)}٪ (أذكار الصباح)</p>
+      ${late.length ? `<div class="warn-box">شعب لم تُسجّل كل أيام الأخطاء بعد: ${late.map(r => `${r.letter} (${toAr(r.late)})`).join('، ')}. الترتيب يُحسب من الأيام المسجّلة.</div>` : ''}
+      <div class="bars">${st.rows.map(r => `<div class="barrow ${r.winner ? 'best' : ''}"><b class="rank">${r.letter}</b><div class="track"><div class="fill" style="width:${r.active ? Math.max(3, r.total) : 0}%"></div></div><span class="num">${r.active ? fmt1(r.total) : '—'}</span></div>`).join('')}</div>
+      <div class="table-wrap"><table><thead><tr><th>الترتيب</th><th>الشعبة</th><th>المجموع</th><th>📖 القرآن</th><th>🕌 الصلاة</th><th>📿 الأذكار</th><th></th></tr></thead><tbody>
+      ${st.rows.map(r => `<tr class="${r.winner ? 'winner' : ''}"><td class="rank">${r.rank ? toAr(r.rank) : '—'}</td><td><b>${esc(gradeOf(grade).name)} ${r.letter}</b></td>
+        <td class="num"><b>${r.active ? fmt1(r.total) : '—'}</b></td>
+        <td>${part(r.q, r.qAvg != null)} ${r.qAvg != null ? `<span class="muted" style="font-size:.85rem">(متوسط ${fmt1(r.qAvg)} خطأ في ${toAr(r.sabrDays)} سبر)</span>` : ''}</td>
+        <td>${part(r.p, r.pAvg != null)} ${r.pAvg != null ? `<span class="muted" style="font-size:.85rem">(${toAr(r.prayerDays)} يوماً)</span>` : ''}</td>
+        <td>${part(r.a, r.schoolDays)} ${r.schoolDays ? `<span class="muted" style="font-size:.85rem">(${toAr(r.aDays)} من ${toAr(r.schoolDays)})</span>` : ''}</td>
         <td>${r.winner ? `<button class="btn sm gold" data-cert="${r.letter}">${ico('trophy')}الشهادة</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div>
-      ${winners.length ? `<p class="muted" style="margin:0">الأقل أخطاءً في ${monthName(mk)}: ${winners.map(w => 'شعبة ' + w.letter).join(' و')} ${winners.length > 1 ? '(تعادل، تُمنح الشهادة للشعبتين)' : ''}</p>` : '<p class="muted" style="margin:0">لم تُسجّل أخطاء لهذا الشهر بعد.</p>'}`;
+      ${winners.length ? `<p class="muted" style="margin:0">الأعلى مجموعاً في ${monthName(mk)}: ${winners.map(w => 'شعبة ' + w.letter).join(' و')} ${winners.length > 1 ? '(تعادل، تُمنح الشهادة للشعبتين)' : ''}</p>` : '<p class="muted" style="margin:0">لا يوجد تسجيل لهذا الشهر بعد.</p>'}`;
     $('#board-body').querySelectorAll('[data-cert]').forEach(b => b.onclick = () => {
       const r = st.rows.find(x => x.letter === b.dataset.cert);
-      certificate({ grade, letter: r.letter, mk, total: r.total });
+      certificate({ grade, letter: r.letter, mk, row: r });
     });
   };
   const allWinners = () => competitionGrades().map(g => {
-    const st = standings(g.id, mk); const w = st.rows.filter(r => r.winner);
-    return `<div class="pod"><span class="muted">${esc(g.name)}</span><b>${w.length ? w.map(x => 'شعبة ' + x.letter).join(' و') : '—'}</b><span class="num">${w.length ? toAr(w[0].total) + ' أخطاء' : 'لا تسجيل بعد'}</span></div>`;
+    const w = monthScores(g.id, mk).rows.filter(r => r.winner);
+    return `<div class="pod"><span class="muted">${esc(g.name)}</span><b>${w.length ? w.map(x => 'شعبة ' + x.letter).join(' و') : '—'}</b><span class="num">${w.length ? fmt1(w[0].total) + ' من ١٠٠' : 'لا تسجيل بعد'}</span></div>`;
   }).join('');
+  const lastSec = store.get('iqra-last', null);
   app().innerHTML = `<div class="page-screen"><div class="bar"><div class="who">${logoSVG()}<span class="chip">لوحة الترتيب الشهرية</span></div><div class="actions" style="margin-inline-start:auto">
-    ${S.lesson ? '<button class="btn" data-back>العودة إلى المصحف</button>' : ''}<button class="btn" data-home>الرئيسية</button></div></div>
+    ${lastSec ? '<button class="btn" data-back>العودة إلى الشعبة</button>' : ''}<button class="btn" data-home>الرئيسية</button></div></div>
     <div class="content"><div class="filters"><div class="field"><label for="b-grade">الصف</label><select id="b-grade">${cg.map(g => `<option value="${g.id}" ${g.id === grade ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></div>
     <div class="field"><label for="b-month">الشهر</label><select id="b-month">${months.map(m => `<option value="${m}" ${m === mk ? 'selected' : ''}>${monthName(m)}</option>`).join('')}</select></div></div>
     <h2 id="b-title"></h2><div id="board-body" style="display:grid;gap:16px"></div>
@@ -827,7 +840,7 @@ function board(grade) {
   $('#b-grade').onchange = e => board(e.target.value);
   $('#b-month').onchange = e => { mk = e.target.value; title(); draw(); };
   app().querySelector('[data-home]').onclick = home;
-  const bk = app().querySelector('[data-back]'); if (bk) bk.onclick = () => openLesson(S.lesson.sectionId);
+  const bk = app().querySelector('[data-back]'); if (bk) bk.onclick = () => go(lastSec);
   title(); draw();
 }
 
@@ -839,7 +852,7 @@ function errWords(n) {
   if (n <= 10) return `بمجموع ${toAr(n)} أخطاء`;
   return `بمجموع ${toAr(n)} خطأً`;
 }
-async function certificate({ grade, letter, mk, total }) {
+async function certificate({ grade, letter, mk, row }) {
   const words = await Q.ayahWords('73:4').catch(() => []);
   const verse = words.slice(-3).map(w => w.t).join(' ');
   const corner = `<svg class="corner CL" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="#b58a2e" stroke-width="2"><path d="M5 5h60M5 5v60"/><path d="M14 14h36M14 14v36"/><path d="M30 30l10-10 10 10-10 10z" fill="#0e5a4b" stroke="none"/><circle cx="30" cy="30" r="16"/></g></svg>`;
@@ -851,7 +864,8 @@ async function certificate({ grade, letter, mk, total }) {
       <div class="c-title">شهادة تكريم</div>
       <div class="c-body">تُمنح هذه الشهادة لطالبات</div>
       <div class="c-name">الصف ${esc(gradeOf(grade).name)} – الشعبة ${letter}</div>
-      <div class="c-body">تقديراً لتميّزهنّ في حصة القرآن الكريم خلال شهر ${monthName(mk)}، إذ كُنّ الأقل أخطاءً بين شعب الصف ${errWords(total)}.</div>
+      <div class="c-body">تقديراً لتميّزهنّ خلال شهر ${monthName(mk)} في تلاوة القرآن الكريم وصلاة الظهر جماعة وأذكار الصباح، إذ حصلن على أعلى مجموع بين شعب الصف: ${fmt1(row.total)} من ١٠٠.</div>
+      <div class="c-parts">القرآن ${toAr(Math.round(row.q))} · الصلاة ${toAr(Math.round(row.p))} · الأذكار ${toAr(Math.round(row.a))}</div>
       ${verse ? `<div class="c-verse">﴿${esc(verse)}﴾</div>` : ''}
       <div class="c-sign"><div><span>معلمة الشعبة</span><i></i></div><div><span>مديرة المدرسة</span><i></i></div></div>
     </div>`;
@@ -866,11 +880,11 @@ function admin(tab = 'plans') {
   if (!S.admin) { home(); adminLoginModal(() => admin(tab)); return; }
   app().innerHTML = `<div class="page-screen"><div class="bar"><div class="who">${logoSVG()}<span class="chip">لوحة الإدارة</span></div>
     <div class="actions" style="margin-inline-start:auto"><button class="btn" data-home>الرئيسية</button><button class="btn danger" data-out>تسجيل الخروج</button></div></div>
-    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['tajweed', 'أحكام التجويد'], ['names', 'أسماء الطالبات'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
+    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['tajweed', 'أحكام التجويد'], ['names', 'أسماء الطالبات'], ['adhkar', 'الأذكار'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
   app().querySelector('[data-home]').onclick = home;
   app().querySelector('[data-out]').onclick = () => { S.admin = null; store.sset('iqra-admin', null); home(); };
   app().querySelectorAll('[data-t]').forEach(b => b.onclick = () => admin(b.dataset.t));
-  ({ plans: adminPlans, track: adminTrack, tajweed: adminTajweed, names: adminNames, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
+  ({ plans: adminPlans, track: adminTrack, tajweed: adminTajweed, names: adminNames, adhkar: adminAdhkar, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
 }
 
 /* ---------- class tracking (principal only) ---------- */
@@ -958,8 +972,8 @@ function adminTrack() {
         if (x.tracked && x.lag >= 3) alerts.push({ w: 3 + x.lag, html: `🔴 <b>${esc(sectionName(id))}</b> متأخرة ${lagWords(x.lag)}`, id, g: g.id });
         else if (x.tracked && x.inactive) alerts.push({ w: 2, html: `⚪ <b>${esc(sectionName(id))}</b> لم تسجّل تقدّماً منذ ${x.lastProg ? shortDate(x.lastProg) : 'مدة'}`, id, g: g.id });
         (miss[g.id] = miss[g.id] || []).push({ id, days: x.missing.filter(e => recent(e.date)) });
-        const [dot, tip] = TRACK_COLORS[x.color];
-        return `<td class="trk c-${x.color}"><button data-sec="${id}" title="${tip}">${dot} ${x.tracked ? (x.lag ? toAr(x.lag) : '✓') : '—'}</button></td>`;
+        const [dot, tip] = TRACK_COLORS[x.color]; const pa = paStats(id, view.mk);
+        return `<td class="trk c-${x.color}"><button data-sec="${id}" title="${tip}">${dot} ${x.tracked ? (x.lag ? toAr(x.lag) : '✓') : '—'}<small class="trk-pa">🕌${pa.pAvg == null ? '—' : toAr(pa.pAvg) + '٪'} 📿${pa.aPct == null ? '—' : toAr(pa.aPct) + '٪'}</small></button></td>`;
       }).join('');
       return `<tr><th scope="row"><button class="link" data-g="${g.id}">${esc(g.name)}</button></th>${row}</tr>`;
     }).join('');
@@ -971,6 +985,15 @@ function adminTrack() {
       if (secs.every(s => s.days.length === due)) { alerts.push({ w: 1.5, html: `✎ <b>${esc(gradeOf(gid).name)}</b>: لم تسجّل أي شعبة أخطاء القراءة الجماعية والسبر في آخر أسبوعين`, id: gid + '-' + LETTERS[0], g: gid }); return; }
       secs.filter(s => s.days.length).forEach(s => { const d = s.days[s.days.length - 1];
         alerts.push({ w: 1, html: `✎ <b>${esc(sectionName(s.id))}</b> لم تسجّل أخطاء ${s.days.length === 2 ? 'يومين، آخرها ' : s.days.length > 2 ? toAr(s.days.length) + ' أيام، آخرها ' : ''}${TYPE_NAMES[d.type]} ${shortDate(d.date)}`, id: s.id, g: gid }); });
+    });
+    // prayer (no record for 3 school days) and today's morning adhkar, for every section including those without a plan
+    GRADES.forEach(g => {
+      const ids = LETTERS.map(l => g.id + '-' + l); const st = ids.map(id => ({ id, ...paStats(id, view.mk) }));
+      const noP = st.filter(s => s.prayerGap >= 3), noA = st.filter(s => !s.adhkarToday);
+      if (noP.length === ids.length) alerts.push({ w: 1.4, html: `🕌 <b>${esc(g.name)}</b>: لم تسجّل أي شعبة صلاة الظهر منذ ٣ أيام دوام أو أكثر`, id: ids[0], g: g.id });
+      else noP.forEach(s => alerts.push({ w: 1.3, html: `🕌 <b>${esc(sectionName(s.id))}</b> لم تسجّل صلاة الظهر منذ ${toAr(s.prayerGap)} أيام دوام`, id: s.id, g: g.id }));
+      if (noA.length === ids.length) alerts.push({ w: .6, html: `📿 <b>${esc(g.name)}</b>: لم تقرأ أي شعبة أذكار الصباح اليوم`, id: ids[0], g: g.id });
+      else noA.forEach(s => alerts.push({ w: .5, html: `📿 <b>${esc(sectionName(s.id))}</b> لم تقرأ أذكار الصباح اليوم`, id: s.id, g: g.id }));
     });
     alerts.sort((a, b) => b.w - a.w);
     body.innerHTML = `<div class="trk-legend">${Object.values(TRACK_COLORS).map(([d, n]) => `<span>${d} ${n}</span>`).join('')}<span class="muted">الرقم = عدد المقاطع المتأخرة، و— = لم تبدأ الشعبة تسجيل «أنهينا»</span></div>
@@ -986,7 +1009,7 @@ function adminTrack() {
   function drawGrade(body) {
     const g = gradeOf(view.grade);
     const rows = LETTERS.map(l => { const id = view.grade + '-' + l; return { id, x: sectionTrack(id, view.mk) }; });
-    body.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الشعبة</th><th>حسب الخطة</th><th>وصلت فعلاً</th><th>الفرق</th><th>نسبة الإنجاز</th><th>أخطاء السبر (${monthName(view.mk)})</th><th>أيام لم تُسجَّل أخطاؤها</th><th>آخر نشاط</th><th></th></tr></thead><tbody>
+    body.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الشعبة</th><th>حسب الخطة</th><th>وصلت فعلاً</th><th>الفرق</th><th>نسبة الإنجاز</th><th>أخطاء السبر (${monthName(view.mk)})</th><th>أيام لم تُسجَّل أخطاؤها</th><th>🕌 الصلاة</th><th>📿 الأذكار</th><th>آخر نشاط</th><th></th></tr></thead><tbody>
       ${rows.map(({ id, x }) => `<tr><td><b>${TRACK_COLORS[x.color][0]} ${esc(sectionName(id))}</b></td>
         <td>${x.expected ? esc(Q.segLabel(x.expected.segs)) : '—'}</td>
         <td>${!x.tracked ? '<span class="muted">لم تبدأ التسجيل</span>' : x.pos ? 'تقرأ: ' + esc(Q.segLabel(x.pos.segs)) : 'أنهت كل المقاطع'}${x.pos && progOf(id, x.pos.id)?.status === 'partial' ? ` <span class="muted">(حتى الآية ${toAr(progOf(id, x.pos.id).upto.split(':')[1])})</span>` : ''}</td>
@@ -994,6 +1017,8 @@ function adminTrack() {
         <td>${x.pct == null ? '—' : `<div class="pct"><span style="width:${x.pct}%"></span></div><span class="num">${toAr(x.pct)}٪</span>`}</td>
         <td>${x.sabrAvg == null ? '—' : `متوسط <b class="num">${toAr(Math.round(x.sabrAvg * 10) / 10)}</b> · مجموع ${toAr(x.sabrTotal)} <span class="muted">(${toAr(x.sabrDays)} سبر)</span>`}</td>
         <td>${g.noCompetition ? '—' : x.missing.length ? `<div class="trk-miss">${x.missing.map(e => `<span class="st late">${e.type === 'sabr' ? 'سبر' : 'جماعية'} ${shortDate(e.date)}</span>`).join('')}</div>` : '<span class="muted">لا يوجد</span>'}</td>
+        ${(() => { const pa = paStats(id, view.mk); return `<td>${pa.pAvg == null ? '—' : `<span class="num">${toAr(pa.pAvg)}٪</span>`}${pa.prayerGap >= 3 ? ` <span class="st late">لا تسجيل منذ ${toAr(pa.prayerGap)} أيام</span>` : ''}</td>
+          <td>${pa.aPct == null ? '—' : `<span class="num">${toAr(pa.aPct)}٪</span>`}${pa.adhkarToday ? '' : ' <span class="st late">ليس اليوم</span>'}</td>`; })()}
         <td class="muted num">${fmtAt(x.last)}</td>
         <td><button class="btn sm" data-sec="${id}">التفاصيل</button></td></tr>`).join('')}</tbody></table></div>
       <p class="muted" style="margin:0">نسبة الإنجاز = الآيات المقروءة ÷ الآيات المطلوبة حتى اليوم، وتظهر لكِ فقط. المقاطع التي قبل أول تسجيل للشعبة تُحسب مقروءة.</p>`;
@@ -1223,10 +1248,23 @@ function adminSettings() {
   const host = $('#adm');
   host.innerHTML = `<div class="card" style="max-width:560px"><div class="field"><label for="st-rec">القارئ الافتراضي لكل الشاشات</label><select id="st-rec">${RECITERS.map(r => `<option value="${r.id}" ${r.id === (S.settings.reciter || RECITERS[0].id) ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>
     <button class="btn primary" data-s style="justify-self:start">حفظ</button></div>
+    <div class="card" style="max-width:560px"><b>أوزان الترتيب الشهري (المجموع من ١٠٠)</b>
+      <span class="muted">نصيب كل مكوّن من المجموع. القيم المقترحة: القرآن ٥٠، الصلاة ٣٠، الأذكار ٢٠.</span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${[['quran', '📖 القرآن'], ['prayer', '🕌 الصلاة'], ['adhkar', '📿 الأذكار']].map(([k, n]) => `<div class="field"><label for="w-${k}">${n}</label><input id="w-${k}" type="number" min="0" max="100" value="${weights()[k]}" style="width:7em"></div>`).join('')}</div>
+      <div class="muted" id="w-sum"></div>
+      <button class="btn primary" data-w style="justify-self:start">حفظ الأوزان</button></div>
     <div class="card" style="max-width:560px"><b>حالة الربط</b><span class="muted">${API.demo ? 'وضع التجربة: البيانات محفوظة على هذا الجهاز فقط. لربط الموقع بقاعدة البيانات المشتركة اتبعي دليل الإعداد وضعي رابط Apps Script في ملف js/config.js.' : 'الموقع مربوط بقاعدة البيانات المشتركة (Google Sheets).'}</span></div>`;
   host.querySelector('[data-s]').onclick = async () => {
     const v = $('#st-rec').value;
     try { await API.call('saveSetting', { cred: S.admin, key: 'reciter', value: v }); S.settings.reciter = v; toast('تم الحفظ'); } catch (e) { toast(e.userMessage || 'تعذّر الحفظ'); }
+  };
+  const wv = () => ({ quran: Math.max(0, +$('#w-quran').value || 0), prayer: Math.max(0, +$('#w-prayer').value || 0), adhkar: Math.max(0, +$('#w-adhkar').value || 0) });
+  const sum = () => { const w = wv(); const s = w.quran + w.prayer + w.adhkar; $('#w-sum').textContent = s === 100 ? 'المجموع ١٠٠ ✓' : `المجموع ${toAr(s)} (يُفضَّل أن يكون ١٠٠، وتُحسب النِّسب منه على أي حال)`; };
+  ['quran', 'prayer', 'adhkar'].forEach(k => { $('#w-' + k).oninput = sum; }); sum();
+  host.querySelector('[data-w]').onclick = async () => {
+    const w = wv(); if (!(w.quran + w.prayer + w.adhkar)) { toast('أدخلي وزناً واحداً على الأقل'); return; }
+    const value = JSON.stringify(w);
+    try { await API.call('saveSetting', { cred: S.admin, key: 'weights', value }); S.settings.weights = value; toast('تم حفظ الأوزان'); } catch (e) { toast(e.userMessage || 'تعذّر الحفظ'); }
   };
 }
 

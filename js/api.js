@@ -34,6 +34,8 @@ const API = (() => {
     mem.progress = mem.progress || [];
     mem.students = mem.students || {};
     mem.tq = mem.tq || [];
+    mem.prayer = mem.prayer || [];
+    mem.adhkar = mem.adhkar || [];
     return mem;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* in-memory only */ } }
@@ -57,12 +59,20 @@ const API = (() => {
     return role;
   }
   const MAX_NAMES = 80;
+  const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  // the section records only today (and may correct it today); the principal can correct any day
+  function dayCheck(db, cred, section, date) {
+    const role = checkCred(db, cred, section);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) fail('التاريخ غير صالح');
+    if (role === 'section' && date !== localToday()) fail('يمكن للشعبة التسجيل والتعديل في اليوم نفسه فقط');
+    return role;
+  }
 
   const local = {
     bootstrap() {
       const db = load();
       // students are never returned here (bootstrap is public)
-      return { plans: db.plans, errors: db.errors, notes: db.notes, settings: db.settings, progress: db.progress };
+      return { plans: db.plans, errors: db.errors, notes: db.notes, settings: db.settings, progress: db.progress, prayer: db.prayer, adhkar: db.adhkar };
     },
     login({ cred }) { const db = load(); return { role: checkCred(db, cred) }; },
     saveError({ cred, rec }) {
@@ -78,7 +88,7 @@ const API = (() => {
     saveNote({ cred, key, text }) { const db = load(); adminOnly(db, cred); if (text) db.notes[key] = text; else delete db.notes[key]; save(); return { ok: true }; },
     saveSetting({ cred, key, value }) {
       const db = load(); adminOnly(db, cred);
-      if (key === 'tajweed' && value) { try { JSON.parse(value); } catch (e) { fail('إعدادات الأحكام غير صالحة'); } }
+      if (['tajweed', 'counts', 'adhkar', 'weights'].includes(key) && value) { try { JSON.parse(value); } catch (e) { fail('الإعدادات غير صالحة'); } }
       if (value) db.settings[key] = value; else delete db.settings[key];
       save(); return { ok: true };
     },
@@ -111,7 +121,34 @@ const API = (() => {
       const clean = (Array.isArray(names) ? names : []).map(n => String(n || '').replace(/\s+/g, ' ').trim().slice(0, 60)).filter(Boolean);
       if (clean.length > MAX_NAMES) fail('عدد الأسماء أكبر من المسموح (' + MAX_NAMES + ')');
       if (clean.length) db.students[section] = clean; else delete db.students[section];
-      save(); return { names: clean };
+      let counts = {}; try { counts = JSON.parse(db.settings.counts || '{}'); } catch (e) { counts = {}; }
+      if (clean.length) counts[section] = clean.length;
+      db.settings.counts = JSON.stringify(counts);
+      save(); return { names: clean, counts };
+    },
+    // Dhuhr prayer in congregation (numbers only) and morning adhkar
+    savePrayer({ cred, rec }) {
+      const db = load(); dayCheck(db, cred, rec.section, rec.date);
+      const present = Math.max(0, Math.min(200, parseInt(rec.present, 10) || 0));
+      const prayed = Math.max(0, Math.min(present, parseInt(rec.prayed, 10) || 0));
+      if (!present) fail('عدد الحاضرات يجب أن يكون أكبر من صفر');
+      let r = db.prayer.find(x => x.section === rec.section && x.date === rec.date);
+      if (!r) { r = {}; db.prayer.push(r); }
+      Object.assign(r, { section: rec.section, date: rec.date, prayed, present, at: new Date().toISOString() });
+      save(); return { rec: { ...r } };
+    },
+    saveAdhkar({ cred, rec }) {
+      const db = load(); dayCheck(db, cred, rec.section, rec.date);
+      const group = rec.group || 'morning';
+      let r = db.adhkar.find(x => x.section === rec.section && x.date === rec.date && x.group === group);
+      if (!r) { r = {}; db.adhkar.push(r); }
+      Object.assign(r, { section: rec.section, date: rec.date, group, at: new Date().toISOString() });
+      save(); return { rec: { ...r } };
+    },
+    deleteAdhkar({ cred, rec }) {
+      const db = load(); dayCheck(db, cred, rec.section, rec.date);
+      db.adhkar = db.adhkar.filter(x => !(x.section === rec.section && x.date === rec.date && x.group === (rec.group || 'morning')));
+      save(); return { ok: true };
     },
     // teacher questions for «تحدّي القمّة»
     getTeacherQuestions({ grade }) { const db = load(); return { questions: db.tq.filter(x => !grade || x.grade === String(grade)) }; },

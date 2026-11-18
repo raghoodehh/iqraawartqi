@@ -117,7 +117,10 @@ function adminNames() {
         <div class="field"><label for="nm-l">الشعبة</label><select id="nm-l">${LETTERS.map(l => `<option ${l === st.letter ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
       <div class="card"><h3 style="margin:0">أسماء ${esc(sectionName(sec()))} ${st.list ? `<span class="muted num">(${toAr(st.list.length)})</span>` : ''}</h3>
         ${st.list == null ? '<p class="muted">جارٍ التحميل…</p>' : st.list.length ? `<div class="nm-chips">${st.list.map(n => `<span>${esc(n)}</span>`).join('')}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-edit>تعديل القائمة</button><button class="btn danger" data-clear>حذف القائمة</button></div>` : '<p class="muted" style="margin:0">لا توجد أسماء لهذه الشعبة بعد.</p>'}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-edit>تعديل القائمة</button><button class="btn danger" data-clear>حذف القائمة</button></div>` : '<p class="muted" style="margin:0">لا توجد أسماء لهذه الشعبة بعد.</p>'}
+        ${st.list && !st.list.length ? `<div class="field" style="max-width:360px"><label for="nm-cnt">عدد الطالبات (لحساب نسبة الصلاة إن لم تُدخلي الأسماء)</label>
+          <div style="display:flex;gap:8px"><input id="nm-cnt" type="number" min="0" max="80" value="${+countsMap()[sec()] || ''}" style="width:7em"><button class="btn" data-cnt>حفظ العدد</button></div></div>`
+          : st.list ? `<span class="muted">عدد الطالبات: ${toAr(st.list.length)} (يُحسب من القائمة تلقائياً)</span>` : ''}</div>
       <h3 style="margin:4px 0 0">إضافة أسماء</h3>
       <div class="nm-ways">
         <button class="game-card" data-w="paste"><b>لصق نص</b><span>انسخي الأسماء من أي مكان والصقيها، كل اسم في سطر.</span></button>
@@ -129,6 +132,12 @@ function adminNames() {
     $('#nm-g', host).onchange = e => { st.grade = e.target.value; load(); };
     $('#nm-l', host).onchange = e => { st.letter = e.target.value; load(); };
     host.querySelector('[data-edit]')?.addEventListener('click', () => review(st.list, 'edit'));
+    host.querySelector('[data-cnt]')?.addEventListener('click', async () => {
+      const n = Math.max(0, Math.min(80, +$('#nm-cnt', host).value || 0)); const m = countsMap();
+      if (n) m[sec()] = n; else delete m[sec()];
+      const value = JSON.stringify(m);
+      try { await API.call('saveSetting', { cred: S.admin, key: 'counts', value }); S.settings.counts = value; toast('تم حفظ عدد الطالبات'); } catch (e) { toast(e.userMessage || 'تعذّر الحفظ'); }
+    });
     host.querySelector('[data-clear]')?.addEventListener('click', () => confirmBox(`حذف كل أسماء ${sectionName(sec())}؟`, () => save([])));
     host.querySelector('[data-w=paste]').onclick = () => {
       const ov = modal(`<header><h2>لصق الأسماء</h2><button class="btn ghost" data-close aria-label="إغلاق">✕</button></header>
@@ -195,7 +204,7 @@ function adminNames() {
     };
   }
   async function save(list) {
-    try { const r = await API.call('saveStudents', { cred: S.admin, section: sec(), names: list }); st.list = r.names; toast(`تم حفظ ${namesCount(r.names.length)} لشعبة ${sectionName(sec())}`); draw(); }
+    try { const r = await API.call('saveStudents', { cred: S.admin, section: sec(), names: list }); st.list = r.names; if (r.counts) S.settings.counts = JSON.stringify(r.counts); toast(`تم حفظ ${namesCount(r.names.length)} لشعبة ${sectionName(sec())}`); draw(); }
     catch (e) { toast(e.userMessage || 'تعذّر الحفظ'); }
   }
   load();

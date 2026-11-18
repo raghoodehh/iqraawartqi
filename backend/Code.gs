@@ -18,6 +18,9 @@ const PROGRESS_COLS = ['section', 'entryId', 'status', 'upto', 'at', 'by'];
 const STUDENTS_COLS = ['section', 'names'];
 const TQ_COLS = ['id', 'grade', 'entryId', 'page', 'q', 'at', 'by'];
 const MAX_NAMES = 80;
+const PRAYER_COLS = ['section', 'date', 'prayed', 'present', 'at'];
+const ADHKAR_COLS = ['section', 'date', 'group', 'at'];
+const JSON_SETTINGS = ['tajweed', 'counts', 'adhkar', 'weights'];
 
 function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
 function sheet_(name, header) {
@@ -51,6 +54,8 @@ function setup() {
   sheet_('Progress', PROGRESS_COLS);
   sheet_('Students', STUDENTS_COLS);
   sheet_('TeacherQuestions', TQ_COLS);
+  sheet_('Prayer', PRAYER_COLS);
+  sheet_('Adhkar', ADHKAR_COLS);
   const def = ss_().getSheetByName('Sheet1') || ss_().getSheetByName('الورقة1');
   if (def && ss_().getSheets().length > 1 && def.getLastRow() === 0) ss_().deleteSheet(def);
   Logger.log('تم الإعداد. كلمات المرور موجودة في ورقة Sections.');
@@ -98,7 +103,7 @@ function handle_(req) {
   if (a === 'saveNote') return withLock_(() => { adminOnly_(req.cred); saveKV_('Notes', req.key, req.text, true); return {}; });
   if (a === 'saveSetting') return withLock_(() => {
     adminOnly_(req.cred);
-    if (req.key === 'tajweed' && req.value) { try { JSON.parse(req.value); } catch (e) { fail_('إعدادات الأحكام غير صالحة'); } }
+    if (JSON_SETTINGS.indexOf(req.key) >= 0 && req.value) { try { JSON.parse(req.value); } catch (e) { fail_('الإعدادات غير صالحة'); } }
     saveKV_('Settings', req.key, req.value, false); return {};
   });
   // تقدّم الشعب في الخطة
@@ -108,6 +113,16 @@ function handle_(req) {
     const data = rows_('Progress');
     const i = data.findIndex(r => String(r[0]) === String(req.section) && String(r[1]) === String(req.entryId));
     if (i >= 0) ss_().getSheetByName('Progress').deleteRow(i + 2);
+    return {};
+  });
+  // صلاة الظهر جماعة (أعداد فقط) وأذكار الصباح
+  if (a === 'savePrayer') return withLock_(() => savePrayer_(req));
+  if (a === 'saveAdhkar') return withLock_(() => saveAdhkar_(req));
+  if (a === 'deleteAdhkar') return withLock_(() => {
+    const r = req.rec || {}; dayCheck_(req.cred, r.section, r.date);
+    const data = rows_('Adhkar');
+    const i = data.findIndex(x => String(x[0]) === String(r.section) && normDate_(x[1]) === String(r.date) && String(x[2]) === String(r.group || 'morning'));
+    if (i >= 0) ss_().getSheetByName('Adhkar').deleteRow(i + 2);
     return {};
   });
   // أسماء الطالبات: لا تُعاد أبداً في bootstrap
@@ -163,7 +178,50 @@ function bootstrap_() {
     section: String(r[0]), entryId: String(r[1]), status: String(r[2]), upto: String(r[3] || ''),
     at: r[4] instanceof Date ? r[4].toISOString() : String(r[4] || ''), by: String(r[5] || ''),
   }));
-  return { plans, errors, notes, settings, progress };
+  const at_ = v => v instanceof Date ? v.toISOString() : String(v || '');
+  const prayer = rows_('Prayer').filter(r => r[0]).map(r => ({ section: String(r[0]), date: normDate_(r[1]), prayed: Number(r[2]) || 0, present: Number(r[3]) || 0, at: at_(r[4]) }));
+  const adhkar = rows_('Adhkar').filter(r => r[0]).map(r => ({ section: String(r[0]), date: normDate_(r[1]), group: String(r[2] || 'morning'), at: at_(r[3]) }));
+  return { plans, errors, notes, settings, progress, prayer, adhkar };
+}
+
+/* ---------- الصلاة والأذكار ---------- */
+function today_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+// the section records only today (and may correct it today); the principal can correct any day
+function dayCheck_(cred, section, date) {
+  const role = check_(cred, section);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) fail_('التاريخ غير صالح');
+  if (role === 'section' && String(date) !== today_()) fail_('يمكن للشعبة التسجيل والتعديل في اليوم نفسه فقط');
+  return role;
+}
+function savePrayer_(req) {
+  const r = req.rec || {};
+  dayCheck_(req.cred, r.section, r.date);
+  const present = Math.max(0, Math.min(200, parseInt(r.present, 10) || 0));
+  const prayed = Math.max(0, Math.min(present, parseInt(r.prayed, 10) || 0));
+  if (!present) fail_('عدد الحاضرات يجب أن يكون أكبر من صفر');
+  const sh = sheet_('Prayer', PRAYER_COLS);
+  const data = rows_('Prayer');
+  const i = data.findIndex(x => String(x[0]) === String(r.section) && normDate_(x[1]) === String(r.date));
+  const at = new Date();
+  const row = [String(r.section), String(r.date), prayed, present, at];
+  const rowNo = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+  sh.getRange(rowNo, 1, 1, 2).setNumberFormat('@');
+  sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
+  return { rec: { section: row[0], date: row[1], prayed, present, at: at.toISOString() } };
+}
+function saveAdhkar_(req) {
+  const r = req.rec || {};
+  dayCheck_(req.cred, r.section, r.date);
+  const group = String(r.group || 'morning');
+  const sh = sheet_('Adhkar', ADHKAR_COLS);
+  const data = rows_('Adhkar');
+  const i = data.findIndex(x => String(x[0]) === String(r.section) && normDate_(x[1]) === String(r.date) && String(x[2]) === group);
+  const at = new Date();
+  const row = [String(r.section), String(r.date), group, at];
+  const rowNo = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+  sh.getRange(rowNo, 1, 1, 3).setNumberFormat('@');
+  sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
+  return { rec: { section: row[0], date: row[1], group, at: at.toISOString() } };
 }
 
 /* ---------- التقدّم ---------- */
@@ -199,11 +257,15 @@ function saveStudents_(section, names) {
   const sh = sheet_('Students', STUDENTS_COLS);
   const data = rows_('Students');
   const i = data.findIndex(r => String(r[0]) === String(section));
-  if (!clean.length) { if (i >= 0) sh.deleteRow(i + 2); return { names: [] }; }
+  // the number of students (not the names) is public: it is the default for «عدد الحاضرات»
+  const counts = {}; rows_('Settings').forEach(r => { if (String(r[0]) === 'counts') { try { Object.assign(counts, JSON.parse(String(r[1]))); } catch (e) { } } });
+  if (clean.length) counts[section] = clean.length;
+  saveKV_('Settings', 'counts', JSON.stringify(counts), false);
+  if (!clean.length) { if (i >= 0) sh.deleteRow(i + 2); return { names: [], counts }; }
   const row = [String(section), JSON.stringify(clean)];
   const rng = i >= 0 ? sh.getRange(i + 2, 1, 1, 2) : sh.getRange(sh.getLastRow() + 1, 1, 1, 2);
   rng.setNumberFormat('@'); rng.setValues([row]);
-  return { names: clean };
+  return { names: clean, counts };
 }
 
 /* ---------- أسئلة المعلمة ---------- */
