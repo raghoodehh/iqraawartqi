@@ -856,12 +856,175 @@ function admin(tab = 'plans') {
   if (!S.admin) { home(); adminLoginModal(() => admin(tab)); return; }
   app().innerHTML = `<div class="page-screen"><div class="bar"><div class="who">${logoSVG()}<span class="chip">لوحة الإدارة</span></div>
     <div class="actions" style="margin-inline-start:auto"><button class="btn" data-home>الرئيسية</button><button class="btn danger" data-out>تسجيل الخروج</button></div></div>
-    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
+    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
   app().querySelector('[data-home]').onclick = home;
   app().querySelector('[data-out]').onclick = () => { S.admin = null; store.sset('iqra-admin', null); home(); };
   app().querySelectorAll('[data-t]').forEach(b => b.onclick = () => admin(b.dataset.t));
-  ({ plans: adminPlans, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
+  ({ plans: adminPlans, track: adminTrack, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
 }
+
+/* ---------- class tracking (principal only) ---------- */
+const ayahsOf = segs => Q.keysOf(segs || []).length;
+function shortDate(iso) { const d = parseISO(iso); return d ? `${WEEKDAYS[d.getDay()]} ${toAr(d.getDate())}/${toAr(d.getMonth() + 1)}` : ''; }
+// the 3rd most recent school day (plan days that are not holidays) up to today
+function schoolDaysBack(grade, n = 3) {
+  const t = todayISO();
+  const days = [...new Set(entries(grade).filter(e => e.date && e.date <= t && e.type !== 'holiday').map(e => e.date))].sort();
+  return days.length >= n ? days[days.length - n] : (days[0] || t);
+}
+function sectionTrack(sectionId, mk) {
+  const grade = sectionId.split('-')[0];
+  const g = gradeOf(grade);
+  const list = entries(grade);
+  if (g.free) return { kind: 'free' };
+  if (!list.length) return { kind: 'noplan' };
+  const t = todayISO();
+  const st = sectionStatus(sectionId);
+  const recs = (S.progress || []).filter(r => r.section === sectionId);
+  const idxs = recs.map(r => list.findIndex(e => e.id === r.entryId)).filter(i => i >= 0);
+  const base = idxs.length ? Math.min(...idxs) : Infinity;
+  const due = list.map((e, i) => ({ e, i })).filter(({ e }) => isNewDay(e) && e.date && e.date <= t);
+  const expected = due.length ? due[due.length - 1].e : null;
+  // ayahs read: segments before tracking began count as read
+  let read = 0;
+  list.forEach((e, i) => {
+    if (!isNewDay(e)) return;
+    const r = progOf(sectionId, e.id);
+    if (i < base || r?.status === 'done') read += ayahsOf(e.segs);
+    else if (r?.status === 'partial' && r.upto) read += ayahsOf(segsUpto(e.segs, r.upto));
+  });
+  const required = due.reduce((a, { e }) => a + ayahsOf(e.segs), 0);
+  // sabr errors for the month
+  const sabr = scoredEntries(grade).filter(e => e.type === 'sabr' && monthKey(e.date) === mk).map(e => recOf(sectionId, e.id)).filter(Boolean);
+  const sabrTotal = sabr.reduce((a, r) => a + (+r.count || 0), 0);
+  // today is not counted: the lesson may not have happened yet
+  const missing = g.noCompetition ? [] : scoredEntries(grade).filter(e => e.date && e.date < t && monthKey(e.date) === mk && !recOf(sectionId, e.id));
+  const acts = [...recs.map(r => r.at), ...S.errors.filter(r => r.section === sectionId).map(r => r.at)].filter(Boolean).sort();
+  const lastProg = recs.map(r => localDay(r.at)).filter(Boolean).sort().pop() || '';
+  const inactive = !lastProg || lastProg < schoolDaysBack(grade);
+  const lag = st.lag;
+  const color = inactive ? 'idle' : lag >= 3 ? 'red' : lag >= 1 ? 'yellow' : 'green';
+  return {
+    kind: 'plan', tracked: st.tracked, lag, pos: st.pos >= 0 ? list[st.pos] : null, expected, color, inactive, lastProg,
+    pct: st.tracked && required ? Math.min(100, Math.round(read / required * 100)) : null, read, required,
+    sabrAvg: sabr.length ? sabrTotal / sabr.length : null, sabrTotal, sabrDays: sabr.length, missing,
+    last: acts.length ? acts[acts.length - 1] : '',
+  };
+}
+const TRACK_COLORS = { green: ['🟢', 'ملتزمة'], yellow: ['🟡', 'متأخرة ١–٢'], red: ['🔴', 'متأخرة ٣+'], idle: ['⚪', 'لا تقدّم منذ ٣ أيام دراسية'] };
+function fmtAt(iso) { return iso ? new Date(iso).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : '—'; }
+
+function adminTrack() {
+  const host = $('#adm');
+  const view = { mode: store.get('iqra-trk-mode', 'school'), grade: store.get('iqra-trk-grade', '7'), section: null, mk: monthKey(todayISO()) };
+  const secGrades = GRADES.filter(g => !g.free && entries(g.id).length);
+  if (!secGrades.some(g => g.id === view.grade)) view.grade = secGrades[0]?.id || '7';
+  const draw = () => {
+    store.set('iqra-trk-mode', view.mode === 'section' ? 'grade' : view.mode); store.set('iqra-trk-grade', view.grade);
+    const tabs = `<div class="filters"><div class="admin-tabs"><button class="btn sm ${view.mode === 'school' ? 'on' : ''}" data-m="school">نظرة عامة على المدرسة</button><button class="btn sm ${view.mode !== 'school' ? 'on' : ''}" data-m="grade">ملخص صف</button></div>
+      ${view.mode !== 'school' ? `<div class="field"><label for="t-grade">الصف</label><select id="t-grade">${secGrades.map(g => `<option value="${g.id}" ${g.id === view.grade ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></div>` : ''}
+      <div class="field"><label for="t-month">شهر السبر</label><select id="t-month">${monthsAll().map(m => `<option value="${m}" ${m === view.mk ? 'selected' : ''}>${monthName(m)}</option>`).join('')}</select></div></div>`;
+    host.innerHTML = tabs + `<div id="t-body"></div>`;
+    host.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { view.mode = b.dataset.m; draw(); });
+    const gs = $('#t-grade', host); if (gs) gs.onchange = e => { view.grade = e.target.value; view.mode = 'grade'; draw(); };
+    $('#t-month', host).onchange = e => { view.mk = e.target.value; draw(); };
+    const body = $('#t-body', host);
+    if (view.mode === 'school') drawSchool(body); else if (view.mode === 'section') drawSection(body); else drawGrade(body);
+  };
+  const monthsAll = () => [...new Set([...secGrades.flatMap(g => monthsOf(g.id)), view.mk])].sort();
+  const open = (grade, section) => { view.grade = grade; view.section = section; view.mode = section ? 'section' : 'grade'; draw(); };
+
+  function drawSchool(body) {
+    const t = todayISO(); const recent = d => d && d <= t && d >= addDays(t, -14);
+    const alerts = []; let untracked = 0; const miss = {};
+    const noPlan = GRADES.filter(g => !g.free && !entries(g.id).length);
+    const cells = (noPlan.length ? `<tr><th scope="row">${esc(noPlan.map(g => g.name).join('، '))}</th><td colspan="${LETTERS.length}" class="trk muted">لا توجد خطة بعد</td></tr>` : '') +
+      GRADES.filter(g => !noPlan.includes(g)).map(g => {
+      const row = LETTERS.map(l => {
+        const id = g.id + '-' + l; const x = sectionTrack(id, view.mk);
+        if (x.kind === 'free') return '<td class="trk muted">قراءة حرة</td>';
+        if (x.kind === 'noplan') return '<td class="trk muted">لا توجد خطة</td>';
+        if (!x.tracked) untracked++;
+        if (x.tracked && x.lag >= 3) alerts.push({ w: 3 + x.lag, html: `🔴 <b>${esc(sectionName(id))}</b> متأخرة ${lagWords(x.lag)}`, id, g: g.id });
+        else if (x.tracked && x.inactive) alerts.push({ w: 2, html: `⚪ <b>${esc(sectionName(id))}</b> لم تسجّل تقدّماً منذ ${x.lastProg ? shortDate(x.lastProg) : 'مدة'}`, id, g: g.id });
+        (miss[g.id] = miss[g.id] || []).push({ id, days: x.missing.filter(e => recent(e.date)) });
+        const [dot, tip] = TRACK_COLORS[x.color];
+        return `<td class="trk c-${x.color}"><button data-sec="${id}" title="${tip}">${dot} ${x.tracked ? (x.lag ? toAr(x.lag) : '✓') : '—'}</button></td>`;
+      }).join('');
+      return `<tr><th scope="row"><button class="link" data-g="${g.id}">${esc(g.name)}</button></th>${row}</tr>`;
+    }).join('');
+    // missing error records (last two weeks): one line per grade if no section recorded, else one per section
+    Object.entries(miss).forEach(([gid, secs]) => {
+      if (gradeOf(gid).noCompetition) return;
+      const due = secs[0] ? Math.max(...secs.map(s => s.days.length)) : 0;
+      if (!due) return;
+      if (secs.every(s => s.days.length === due)) { alerts.push({ w: 1.5, html: `✎ <b>${esc(gradeOf(gid).name)}</b>: لم تسجّل أي شعبة أخطاء القراءة الجماعية والسبر في آخر أسبوعين`, id: gid + '-' + LETTERS[0], g: gid }); return; }
+      secs.filter(s => s.days.length).forEach(s => { const d = s.days[s.days.length - 1];
+        alerts.push({ w: 1, html: `✎ <b>${esc(sectionName(s.id))}</b> لم تسجّل أخطاء ${s.days.length === 2 ? 'يومين، آخرها ' : s.days.length > 2 ? toAr(s.days.length) + ' أيام، آخرها ' : ''}${TYPE_NAMES[d.type]} ${shortDate(d.date)}`, id: s.id, g: gid }); });
+    });
+    alerts.sort((a, b) => b.w - a.w);
+    body.innerHTML = `<div class="trk-legend">${Object.values(TRACK_COLORS).map(([d, n]) => `<span>${d} ${n}</span>`).join('')}<span class="muted">الرقم = عدد المقاطع المتأخرة، و— = لم تبدأ الشعبة تسجيل «أنهينا»</span></div>
+      <div class="table-wrap"><table class="trk-table"><thead><tr><th>الصف</th>${LETTERS.map(l => `<th>${l}</th>`).join('')}</tr></thead><tbody>${cells}</tbody></table></div>
+      <h3 style="margin:6px 0 0">تنبيهات</h3>
+      <div class="card trk-alerts">${untracked ? `<div>⚪ ${toAr(untracked)} شعبة لم تبدأ تسجيل «أنهينا» بعد، فتُعتبر ملتزمة بالخطة حتى تسجّل.</div>` : ''}
+        ${alerts.length ? alerts.slice(0, 40).map(a => `<div><button class="link" data-sec="${a.id}">${a.html}</button></div>`).join('') : (untracked ? '' : '<div class="muted">لا توجد تنبيهات. ما شاء الله!</div>')}
+        ${alerts.length > 40 ? `<div class="muted">و${toAr(alerts.length - 40)} تنبيهات أخرى، تجدينها في ملخص كل صف.</div>` : ''}</div>`;
+    body.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => open(b.dataset.sec.split('-')[0], b.dataset.sec));
+    body.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { if (secGrades.some(g => g.id === b.dataset.g)) open(b.dataset.g, null); });
+  }
+
+  function drawGrade(body) {
+    const g = gradeOf(view.grade);
+    const rows = LETTERS.map(l => { const id = view.grade + '-' + l; return { id, x: sectionTrack(id, view.mk) }; });
+    body.innerHTML = `<div class="table-wrap"><table><thead><tr><th>الشعبة</th><th>حسب الخطة</th><th>وصلت فعلاً</th><th>الفرق</th><th>نسبة الإنجاز</th><th>أخطاء السبر (${monthName(view.mk)})</th><th>أيام لم تُسجَّل أخطاؤها</th><th>آخر نشاط</th><th></th></tr></thead><tbody>
+      ${rows.map(({ id, x }) => `<tr><td><b>${TRACK_COLORS[x.color][0]} ${esc(sectionName(id))}</b></td>
+        <td>${x.expected ? esc(Q.segLabel(x.expected.segs)) : '—'}</td>
+        <td>${!x.tracked ? '<span class="muted">لم تبدأ التسجيل</span>' : x.pos ? 'تقرأ: ' + esc(Q.segLabel(x.pos.segs)) : 'أنهت كل المقاطع'}${x.pos && progOf(id, x.pos.id)?.status === 'partial' ? ` <span class="muted">(حتى الآية ${toAr(progOf(id, x.pos.id).upto.split(':')[1])})</span>` : ''}</td>
+        <td>${x.tracked ? (x.lag ? `<b class="t-${x.color}">${lagWords(x.lag)}</b>` : 'ملتزمة') : '—'}</td>
+        <td>${x.pct == null ? '—' : `<div class="pct"><span style="width:${x.pct}%"></span></div><span class="num">${toAr(x.pct)}٪</span>`}</td>
+        <td>${x.sabrAvg == null ? '—' : `متوسط <b class="num">${toAr(Math.round(x.sabrAvg * 10) / 10)}</b> · مجموع ${toAr(x.sabrTotal)} <span class="muted">(${toAr(x.sabrDays)} سبر)</span>`}</td>
+        <td>${g.noCompetition ? '—' : x.missing.length ? `<div class="trk-miss">${x.missing.map(e => `<span class="st late">${e.type === 'sabr' ? 'سبر' : 'جماعية'} ${shortDate(e.date)}</span>`).join('')}</div>` : '<span class="muted">لا يوجد</span>'}</td>
+        <td class="muted num">${fmtAt(x.last)}</td>
+        <td><button class="btn sm" data-sec="${id}">التفاصيل</button></td></tr>`).join('')}</tbody></table></div>
+      <p class="muted" style="margin:0">نسبة الإنجاز = الآيات المقروءة ÷ الآيات المطلوبة حتى اليوم، وتظهر لكِ فقط. المقاطع التي قبل أول تسجيل للشعبة تُحسب مقروءة.</p>`;
+    body.querySelectorAll('[data-sec]').forEach(b => b.onclick = () => open(view.grade, b.dataset.sec));
+  }
+
+  function drawSection(body) {
+    const id = view.section; const grade = id.split('-')[0];
+    const list = entries(grade); const t = todayISO(); const x = sectionTrack(id, view.mk);
+    const recs = (S.progress || []).filter(r => r.section === id);
+    const idxs = recs.map(r => list.findIndex(e => e.id === r.entryId)).filter(i => i >= 0);
+    const base = idxs.length ? Math.min(...idxs) : Infinity;
+    const last = Math.max(todayIndex(list), ...idxs, x.pos ? list.indexOf(x.pos) : -1);
+    const rows = list.slice(0, last + 1).map((e, i) => {
+      if (isNewDay(e)) {
+        const r = progOf(id, e.id);
+        const st = r?.status === 'done' ? `<span class="st done">أنهتها ${shortDate(localDay(r.at))}</span>`
+          : r?.status === 'partial' ? `<span class="st soon">وصلت إلى الآية ${toAr(r.upto.split(':')[1])} · ${shortDate(localDay(r.at))}</span>`
+          : i < base ? '<span class="muted">قبل بدء التسجيل</span>'
+          : e.date && e.date <= t ? '<span class="st late">لم تُقرأ بعد</span>' : '<span class="muted">قادم</span>';
+        return `<tr><td class="num">${esc(e.date ? shortDate(e.date) : '')}</td><td>${TYPE_NAMES[e.type]}</td><td>${esc(Q.segLabel(e.segs))}</td><td>${st}</td></tr>`;
+      }
+      if (SCORED.includes(e.type)) {
+        const r = recOf(id, e.id);
+        const st = r ? `<span class="st done">الأخطاء: ${toAr(r.count)}</span>` : e.date && e.date <= t ? '<span class="st late">لم تُسجَّل الأخطاء</span>' : '<span class="muted">قادم</span>';
+        return `<tr class="trk-scored"><td class="num">${esc(e.date ? shortDate(e.date) : '')}</td><td>${TYPE_NAMES[e.type]}</td><td class="muted">صفحات الأسبوع</td><td>${st}</td></tr>`;
+      }
+      return '';
+    }).reverse().join('');
+    const sabr = scoredEntries(grade).filter(e => e.type === 'sabr' && e.date && e.date <= t).map(e => ({ e, r: recOf(id, e.id) })).filter(o => o.r).slice(-12);
+    const max = Math.max(1, ...sabr.map(o => +o.r.count || 0));
+    body.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" data-back>→ ملخص ${esc(gradeOf(grade).name)}</button><h3 style="margin:0">${TRACK_COLORS[x.color][0]} ${esc(sectionName(id))}</h3>
+      <span class="chip">${x.tracked ? (x.lag ? 'متأخرة ' + lagWords(x.lag) : 'ملتزمة') : 'لم تبدأ تسجيل «أنهينا»'}</span>${x.pct != null ? `<span class="chip">الإنجاز ${toAr(x.pct)}٪</span>` : ''}</div>
+      <div class="trk-detail"><div class="card"><h3 style="margin-top:0">أخطاء السبر عبر الأسابيع</h3>
+        ${sabr.length ? `<div class="bars">${sabr.map(o => `<div class="barrow"><span class="muted" style="font-size:.85rem">${shortDate(o.e.date)}</span><div class="track"><div class="fill" style="width:${Math.max(3, (+o.r.count || 0) / max * 100)}%"></div></div><b class="num">${toAr(o.r.count)}</b></div>`).join('')}</div>` : '<p class="muted">لا توجد أخطاء سبر مسجّلة بعد.</p>'}</div>
+      <div class="table-wrap"><table><thead><tr><th>اليوم</th><th>النوع</th><th>المقطع</th><th>الحالة</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">لا توجد أيام بعد.</td></tr>'}</tbody></table></div></div>`;
+    body.querySelector('[data-back]').onclick = () => open(grade, null);
+  }
+  draw();
+}
+function addDays(iso, n) { const d = parseISO(iso); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
 function dayName(iso) { const d = parseISO(iso); return d ? WEEKDAYS[d.getDay()] : ''; }
 function validateEntry(e) {

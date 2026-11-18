@@ -350,6 +350,29 @@ tr.winner td { background: var(--gold-soft); }
 .btn.prog-done { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .btn.prog-part { background: var(--gold-soft); color: var(--warn); border-color: var(--gold); }
 
+/* principal's class tracking */
+.trk-legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: .95rem; }
+.trk-table th, .trk-table td { text-align: center; }
+.trk-table th[scope=row] { text-align: start; }
+.trk { padding: 4px; }
+.trk button { width: 100%; min-height: 48px; border: 0; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; color: var(--ink); background: var(--surface-2); }
+.trk.c-green button { background: #d9f0e1; color: #14532d; }
+.trk.c-yellow button { background: #fbefc5; color: #7a5200; }
+.trk.c-red button { background: #f9d6d2; color: #8a1c14; }
+.trk.c-idle button { background: var(--surface-2); color: var(--muted); }
+.trk.muted { font-size: .85rem; }
+.t-red { color: var(--danger); } .t-yellow { color: var(--warn); } .t-green, .t-idle { color: inherit; }
+button.link { background: none; border: 0; padding: 4px 0; font: inherit; color: inherit; cursor: pointer; text-align: start; }
+button.link:hover { text-decoration: underline; }
+.trk-alerts { display: grid; gap: 4px; }
+.content > * { min-width: 0; }
+.trk-miss { display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; }
+.pct { display: inline-block; width: 70px; height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; vertical-align: middle; margin-inline-end: 6px; }
+.pct span { display: block; height: 100%; background: var(--accent); }
+.trk-detail { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 16px; align-items: start; }
+.trk-scored td { background: var(--surface-2); }
+@media (max-width: 1000px) { .trk-detail { grid-template-columns: 1fr; } }
+
 #toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 60; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 12px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 
 @media (max-width: 1000px) {
