@@ -66,6 +66,76 @@ function entrySegs(list, idx) {
 function scoredEntries(grade) { return entries(grade).filter(e => SCORED.includes(e.type)); }
 function recOf(section, entryId) { return S.errors.find(r => r.section === section && r.entryId === entryId); }
 
+/* ---------- section progress through the plan ---------- */
+function progOf(section, entryId) { return (S.progress || []).find(r => r.section === section && r.entryId === String(entryId)); }
+function localDay(iso) { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+const isNewDay = e => e && e.type === 'new' && e.segs && e.segs.length;
+// segs up to and including "s:a" / segs after "s:a"
+function segsUpto(segs, upto) {
+  const [us, ua] = String(upto).split(':').map(Number); const out = [];
+  for (const [s, a1, a2] of segs) { if (s === us && ua >= a1 && ua <= a2) { out.push([s, a1, ua]); return out; } out.push([s, a1, a2]); }
+  return out;
+}
+function segsAfter(segs, upto) {
+  const [us, ua] = String(upto).split(':').map(Number); const out = []; let found = false;
+  for (const [s, a1, a2] of segs) {
+    if (found) out.push([s, a1, a2]);
+    else if (s === us && ua >= a1 && ua <= a2) { found = true; if (ua < a2) out.push([s, ua + 1, a2]); }
+  }
+  return found ? out : segs;
+}
+/* Where a section really is.
+   Tracking starts at the first segment the section ever recorded: everything before it counts as done,
+   so a section with no records follows the plan exactly as before. */
+function sectionStatus(sectionId) {
+  const grade = sectionId.split('-')[0];
+  const g = gradeOf(grade);
+  const list = entries(grade);
+  const out = { tracked: false, pos: -1, lag: 0, list };
+  if (!g || g.free || !list.length) return out;
+  const recs = (S.progress || []).filter(r => r.section === sectionId);
+  const idxs = recs.map(r => list.findIndex(e => e.id === r.entryId)).filter(i => i >= 0);
+  if (!idxs.length) return out;
+  out.tracked = true;
+  const base = Math.min(...idxs);
+  const t = todayISO();
+  const done = i => i < base || progOf(sectionId, list[i].id)?.status === 'done';
+  list.forEach((e, i) => {
+    if (!isNewDay(e) || done(i)) return;
+    if (out.pos < 0) out.pos = i;
+    if (e.date && e.date <= t) out.lag++;
+  });
+  return out;
+}
+function startIndex(sectionId) {
+  const list = entries(sectionId.split('-')[0]);
+  const ti = todayIndex(list);
+  const st = sectionStatus(sectionId);
+  // on group/sabr days the class does today's activity (with what it actually read)
+  if (st.lag > 0 && st.pos >= 0 && !SCORED.includes(list[ti]?.type)) return st.pos;
+  return ti;
+}
+/* For a lagging section on a group/sabr day: the segments it actually finished since the previous
+   group/sabr day (by date), plus the read part of a partial segment. null -> use the plan's weekParts. */
+function actualParts(sectionId, list, idx) {
+  if (sectionStatus(sectionId).lag <= 0) return null;
+  let a = idx; while (a > 0 && SCORED.includes(list[a - 1].type)) a--;
+  let b = idx; while (b < list.length - 1 && SCORED.includes(list[b + 1].type)) b++;
+  let j = a - 1; while (j >= 0 && !SCORED.includes(list[j].type)) j--;
+  const from = j >= 0 ? (list[j].date || '') : '';
+  const to = list[b].date || todayISO();
+  const parts = [];
+  list.forEach(e => {
+    if (!isNewDay(e)) return;
+    const r = progOf(sectionId, e.id); if (!r) return;
+    const d = localDay(r.at); if (!d || (from && d <= from) || d > to) return;
+    const segs = r.status === 'partial' && r.upto ? segsUpto(e.segs, r.upto) : e.segs;
+    parts.push({ id: e.id, date: d, day: e.day, segs, partial: r.status === 'partial' });
+  });
+  return parts.length ? parts : null;
+}
+function lagWords(n) { return n === 1 ? 'مقطعاً واحداً' : n === 2 ? 'مقطعين' : n <= 10 ? `${toAr(n)} مقاطع` : `${toAr(n)} مقطعاً`; }
+
 /* ---------- boot ---------- */
 async function boot() {
   app().innerHTML = `<div class="landing"><div></div><div class="picker" style="justify-items:center"><div class="brand">${logoSVG()}<div><h1>اقرأ وارتقِ</h1><p>جارٍ التحميل…</p></div></div></div><div></div></div>`;
@@ -139,7 +209,7 @@ function openLesson(sectionId) {
   const list = entries(grade);
   const free = !!gradeOf(grade).free || !list.length;
   S.lesson = {
-    sectionId, grade, free, idx: free ? -1 : todayIndex(list), freePage: store.get('iqra-free-' + grade, 1),
+    sectionId, grade, free, idx: free ? -1 : startIndex(sectionId), freePage: store.get('iqra-free-' + grade, 1),
     part: -1, pages: [], pi: 0, portion: null, keys: [],
     tajweed: store.get('iqra-tj', false), gharib: store.get('iqra-gh', true), showAll: false,
     pen: null, hl: {}, sel: null, tab: 'tafsir', zoom: 1, seq: 0, page: null,
@@ -151,13 +221,23 @@ function curEntry() { const L = S.lesson; return L.free ? null : entries(L.grade
 function computePortion() {
   const L = S.lesson;
   const list = entries(L.grade);
-  L.parts = [];
+  L.parts = []; L.actual = false; L.resume = null;
   if (L.free) { L.segs = null; }
   else {
     const e = list[L.idx];
     L.segs = entrySegs(list, L.idx);
-    if (e && SCORED.includes(e.type)) L.parts = weekParts(list, L.idx);
+    if (e && SCORED.includes(e.type)) {
+      const act = !(e.segs && e.segs.length) && actualParts(L.sectionId, list, L.idx);
+      if (act) { L.parts = act; L.actual = true; L.segs = act.flatMap(p => p.segs); }
+      else L.parts = weekParts(list, L.idx);
+    }
     if (L.part >= 0 && L.parts[L.part]) L.segs = L.parts[L.part].segs;
+    // a partly-read segment continues from the next ayah
+    const pr = isNewDay(e) && progOf(L.sectionId, e.id);
+    if (pr && pr.status === 'partial' && pr.upto) {
+      const rest = segsAfter(e.segs, pr.upto);
+      if (rest.length && rest !== e.segs) { L.segs = rest; L.resume = pr.upto; }
+    }
   }
   if (L.segs) {
     L.keys = Q.keysOf(L.segs);
@@ -178,12 +258,23 @@ function renderLesson() {
   const e = curEntry();
   const list = entries(L.grade);
   const canScore = !g.noCompetition && e && SCORED.includes(e.type);
+  const st = L.free ? null : sectionStatus(L.sectionId);
+  const pr = !L.free && isNewDay(e) ? progOf(L.sectionId, e.id) : null;
+  const doneBtn = !L.free && isNewDay(e)
+    ? (pr && pr.status === 'done' ? `<button class="btn prog-done" data-a="prog">✓ أنهينا هذا المقطع</button>`
+      : pr ? `<button class="btn prog-part" data-a="prog">وصلنا إلى الآية ${toAr(pr.upto.split(':')[1])}</button>`
+      : `<button class="btn primary" data-a="prog">أنهينا مقطع اليوم ✓</button>`) : '';
+  const ti = todayIndex(list);
+  const lagBar = st && st.lag > 0
+    ? `<div class="lagbar" role="status"><b>متأخرات ${lagWords(st.lag)} عن الخطة</b>
+        ${st.pos >= 0 && L.idx !== st.pos ? '<button class="btn sm" data-a="pos">الانتقال إلى موضع الشعبة</button>' : ''}
+        ${L.idx !== ti ? '<button class="btn sm" data-a="today">الانتقال إلى مقطع اليوم</button>' : ''}</div>` : '';
   const when = L.free
     ? `<div class="daynav"><label class="muted" for="sura-pick">السورة</label><select id="sura-pick" class="btn sm">${Q.meta.suras.map(s => `<option value="${s.n}">${toAr(s.n)}. ${esc(s.name)}</option>`).join('')}</select>
        <label class="muted" for="page-pick">الصفحة</label><input id="page-pick" class="btn sm num" type="number" min="1" max="604" value="${L.freePage}" style="width:6em"></div>`
     : `<div class="daynav"><button class="btn ghost" data-a="prev" aria-label="اليوم السابق" ${L.idx <= 0 ? 'disabled' : ''}>${arrow('r')}</button>
        <div class="when"><b>${e ? `<span class="type-badge t-${e.type}">${TYPE_NAMES[e.type] || ''}</span>${esc(e.segs && e.segs.length ? Q.segLabel(e.segs) : e.label || '')}` : 'لا توجد خطة'}</b>
-       <span>${e ? (e.date ? fmtDate(e.date) : esc((e.day || '') + ' ' + (e.dateText || ''))) : ''}${e && e.date === todayISO() ? ' · اليوم' : ''}</span></div>
+       <span>${e ? (e.date ? fmtDate(e.date) : esc((e.day || '') + ' ' + (e.dateText || ''))) : ''}${e && e.date === todayISO() ? ' · اليوم' : ''}${L.resume ? ` · نكمل من الآية ${toAr(+L.resume.split(':')[1] + 1)}` : ''}</span></div>
        <button class="btn ghost" data-a="next" aria-label="اليوم التالي" ${L.idx >= list.length - 1 ? 'disabled' : ''}>${arrow('l')}</button>
        <button class="btn sm" data-a="today">اليوم</button></div>`;
   app().innerHTML = `<div class="lesson">
@@ -191,12 +282,14 @@ function renderLesson() {
       <div class="who">${logoSVG()}<span class="chip">${esc(sectionName(L.sectionId))}</span></div>
       ${when}
       <div class="actions">
+        ${doneBtn}
         <button class="btn primary" data-a="games">${ico('spark')}التحديات</button>
         <button class="btn ${e && e.type === 'sabr' ? 'gold' : ''}" data-a="strat">${ico('dice')}استراتيجيات الحصة</button>
         ${canScore ? `<button class="btn gold" data-a="errors">${ico('pen')}تسجيل الأخطاء</button>` : ''}
         ${g.noCompetition ? '' : `<button class="btn" data-a="board">${ico('trophy')}الترتيب</button>`}
         <button class="btn" data-a="home">تغيير الصف</button>
       </div>
+      ${lagBar}
     </div>
     <div class="stage">
       <div class="reader">
@@ -254,6 +347,8 @@ function wireLesson() {
     prev() { if (L.idx > 0) { L.idx--; resetEntry(); } },
     next() { if (L.idx < entries(L.grade).length - 1) { L.idx++; resetEntry(); } },
     today() { L.idx = todayIndex(entries(L.grade)); resetEntry(); },
+    pos() { const p = sectionStatus(L.sectionId).pos; if (p >= 0) { L.idx = p; resetEntry(); } },
+    prog() { openProgress(); },
     games() { openGames(); },
     strat() { openStrategies(); },
     errors() { openErrors(L.sectionId, curEntry()?.id); },
@@ -303,8 +398,9 @@ function renderSegTabs() {
   const L = S.lesson;
   const host = $('#segtabs');
   if (!L.parts || !L.parts.length) { host.innerHTML = ''; return; }
-  host.innerHTML = `<button class="btn sm ${L.part < 0 ? 'on' : ''}" data-p="-1">صفحات الأسبوع كاملة</button>` +
-    L.parts.map((p, i) => `<button class="btn sm ${L.part === i ? 'on' : ''}" data-p="${i}">${esc(WEEKDAYS[parseISO(p.date)?.getDay()] || p.day || '')}: ${esc(Q.segLabel(p.segs))}</button>`).join('');
+  host.innerHTML = (L.actual ? '<span class="chip" title="الشعبة متأخرة عن الخطة، فالصفحات مما قرأته فعلاً هذا الأسبوع">مما قرأته الشعبة فعلاً</span>' : '') +
+    `<button class="btn sm ${L.part < 0 ? 'on' : ''}" data-p="-1">صفحات الأسبوع كاملة</button>` +
+    L.parts.map((p, i) => `<button class="btn sm ${L.part === i ? 'on' : ''}" data-p="${i}">${esc(WEEKDAYS[parseISO(p.date)?.getDay()] || p.day || '')}: ${esc(Q.segLabel(p.segs))}${p.partial ? ' (جزء)' : ''}</button>`).join('');
   host.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { L.part = +b.dataset.p; L.pi = 0; computePortion(); renderSegTabs(); showPage(); });
 }
 
@@ -563,6 +659,56 @@ function adminLoginModal(after) {
     const cred = { role: 'admin', pw: $('#adm-pw', ov).value };
     try { await API.call('login', { cred }); S.admin = cred; store.sset('iqra-admin', cred); closeModal(); toast('تم تسجيل الدخول'); after && after(); }
     catch (err) { const m = $('#adm-err', ov); m.hidden = false; m.textContent = err.userMessage || 'تعذّر الدخول'; }
+  };
+}
+
+/* ---------- «أنهينا» progress ---------- */
+function openProgress() {
+  const L = S.lesson; const e = curEntry();
+  if (!isNewDay(e)) return;
+  const sectionId = L.sectionId;
+  const pr = progOf(sectionId, e.id);
+  const keys = Q.keysOf(e.segs);
+  const needLogin = !S.admin && !S.sec[sectionId];
+  const ov = modal(`<header><h2>${esc(Q.segLabel(e.segs))}</h2><button class="btn ghost" data-close aria-label="إغلاق">✕</button></header>
+    ${pr ? `<p class="muted" style="margin:0">المسجّل الآن: <b>${pr.status === 'done' ? 'أنهينا المقطع كاملاً' : 'وصلنا إلى الآية ' + toAr(pr.upto.split(':')[1])}</b></p>` : ''}
+    <button class="btn primary" id="p-done" style="min-height:58px;font-size:1.2rem">أنهينا المقطع كاملاً ✓</button>
+    ${keys.length > 1 ? `<div class="field"><label for="p-upto">أو: وصلنا إلى الآية…</label>
+      <div style="display:flex;gap:8px"><select id="p-upto" style="flex:1;min-height:50px">${keys.slice(0, -1).map(k => `<option value="${k}" ${pr && pr.upto === k ? 'selected' : ''}>${esc(Q.suraName(+k.split(':')[0]))} ${toAr(k.split(':')[1])}</option>`).join('')}</select>
+      <button class="btn gold" id="p-part" style="min-height:50px">حفظ</button></div></div>` : ''}
+    ${needLogin ? `<div class="field"><label for="p-pw">كلمة مرور شعبة ${esc(sectionName(sectionId))}</label><input id="p-pw" type="password" inputmode="numeric" autocomplete="off">${API.demo ? '<span class="muted">في وضع التجربة: 1111</span>' : ''}</div>` : ''}
+    <div class="err-msg" id="p-err" hidden></div>
+    ${pr ? '<button class="btn danger" id="p-undo">إلغاء التسجيل (ضُغط بالخطأ)</button>' : ''}`);
+  // show the opening words of each ayah in the list
+  const sel = $('#p-upto', ov);
+  if (sel) [...sel.options].forEach(async o => {
+    try { const w = await Q.ayahWords(o.value); if (w.length) o.textContent += ': ' + Q.ayahText(w.slice(0, 4)) + '…'; } catch (err) { /* label stays short */ }
+  });
+  const cred = () => S.admin || S.sec[sectionId] || { role: 'section', id: sectionId, pw: $('#p-pw', ov)?.value || '' };
+  const run = async (btn, fn) => {
+    const c = cred(); btn.disabled = true;
+    try {
+      await fn(c);
+      if (c.role === 'section') { S.sec[sectionId] = c; store.sset('iqra-sec', S.sec); }
+      closeModal(); return true;
+    } catch (err) { const m = $('#p-err', ov); m.hidden = false; m.textContent = err.userMessage || 'تعذّر الحفظ'; btn.disabled = false; return false; }
+  };
+  const put = rec => { S.progress = (S.progress || []).filter(r => !(r.section === rec.section && r.entryId === rec.entryId)); S.progress.push(rec); };
+  $('#p-done', ov).onclick = async e2 => {
+    const ok = await run(e2.currentTarget, async c => { const res = await API.call('saveProgress', { cred: c, rec: { section: sectionId, entryId: e.id, status: 'done' } }); put(res.rec); });
+    if (!ok) return;
+    const st = sectionStatus(sectionId);
+    if (st.lag > 0 && st.pos >= 0 && st.pos !== L.idx) { L.idx = st.pos; toast('أحسنتنّ! هذا المقطع التالي'); }
+    else toast('أحسنتنّ! سُجّل إنهاء المقطع');
+    resetEntry();
+  };
+  if (sel) $('#p-part', ov).onclick = async e2 => {
+    const ok = await run(e2.currentTarget, async c => { const res = await API.call('saveProgress', { cred: c, rec: { section: sectionId, entryId: e.id, status: 'partial', upto: sel.value } }); put(res.rec); });
+    if (ok) { toast('سُجّل: وصلنا إلى الآية ' + toAr(sel.value.split(':')[1])); resetEntry(); }
+  };
+  if (pr) $('#p-undo', ov).onclick = async e2 => {
+    const ok = await run(e2.currentTarget, async c => { await API.call('deleteProgress', { cred: c, section: sectionId, entryId: e.id }); S.progress = S.progress.filter(r => !(r.section === sectionId && r.entryId === e.id)); });
+    if (ok) { toast('أُلغي التسجيل'); resetEntry(); }
   };
 }
 

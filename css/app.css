@@ -344,6 +344,12 @@ tr.winner td { background: var(--gold-soft); }
 .cert .c-sign div { display: grid; gap: 3.2cqw; justify-items: center; }
 .cert .c-sign i { display: block; width: 18cqw; border-bottom: 1px solid #1d2b27; }
 
+/* section progress («أنهينا») and lag notice */
+.lagbar { flex-basis: 100%; order: 4; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; background: var(--gold-soft); color: var(--ink); border: 1px solid var(--gold); border-radius: 10px; padding: 6px 12px; }
+.lagbar b { color: var(--warn); }
+.btn.prog-done { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.btn.prog-part { background: var(--gold-soft); color: var(--warn); border-color: var(--gold); }
+
 #toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 60; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 12px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 
 @media (max-width: 1000px) {
