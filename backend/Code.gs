@@ -14,6 +14,10 @@
 const LETTERS = ['أ', 'ب', 'ج', 'د', 'هـ'];
 const GRADE_IDS = ['KG', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
 const CELL_LIMIT = 45000;
+const PROGRESS_COLS = ['section', 'entryId', 'status', 'upto', 'at', 'by'];
+const STUDENTS_COLS = ['section', 'names'];
+const TQ_COLS = ['id', 'grade', 'entryId', 'page', 'q', 'at', 'by'];
+const MAX_NAMES = 80;
 
 function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
 function sheet_(name, header) {
@@ -44,6 +48,9 @@ function setup() {
   sheet_('Errors', ['id', 'section', 'grade', 'entryId', 'date', 'type', 'count', 'at', 'by']);
   sheet_('Notes', ['key', 'text', 'at']);
   sheet_('Settings', ['key', 'value']);
+  sheet_('Progress', PROGRESS_COLS);
+  sheet_('Students', STUDENTS_COLS);
+  sheet_('TeacherQuestions', TQ_COLS);
   const def = ss_().getSheetByName('Sheet1') || ss_().getSheetByName('الورقة1');
   if (def && ss_().getSheets().length > 1 && def.getLastRow() === 0) ss_().deleteSheet(def);
   Logger.log('تم الإعداد. كلمات المرور موجودة في ورقة Sections.');
@@ -89,7 +96,42 @@ function handle_(req) {
   if (a === 'deleteError') return withLock_(() => { adminOnly_(req.cred); deleteRow_('Errors', 0, req.id); return {}; });
   if (a === 'savePlan') return withLock_(() => { adminOnly_(req.cred); savePlan_(req.grade, req.entries); return {}; });
   if (a === 'saveNote') return withLock_(() => { adminOnly_(req.cred); saveKV_('Notes', req.key, req.text, true); return {}; });
-  if (a === 'saveSetting') return withLock_(() => { adminOnly_(req.cred); saveKV_('Settings', req.key, req.value, false); return {}; });
+  if (a === 'saveSetting') return withLock_(() => {
+    adminOnly_(req.cred);
+    if (req.key === 'tajweed' && req.value) { try { JSON.parse(req.value); } catch (e) { fail_('إعدادات الأحكام غير صالحة'); } }
+    saveKV_('Settings', req.key, req.value, false); return {};
+  });
+  // تقدّم الشعب في الخطة
+  if (a === 'saveProgress') return withLock_(() => saveProgress_(req));
+  if (a === 'deleteProgress') return withLock_(() => {
+    check_(req.cred, req.section);
+    const data = rows_('Progress');
+    const i = data.findIndex(r => String(r[0]) === String(req.section) && String(r[1]) === String(req.entryId));
+    if (i >= 0) ss_().getSheetByName('Progress').deleteRow(i + 2);
+    return {};
+  });
+  // أسماء الطالبات: لا تُعاد أبداً في bootstrap
+  if (a === 'getStudents') {
+    const role = check_(req.cred);
+    const all = studentsMap_();
+    if (role === 'admin') {
+      if (req.section) { const one = {}; one[req.section] = all[req.section] || []; return { students: one }; }
+      return { students: all };
+    }
+    const own = {}; own[req.cred.id] = all[req.cred.id] || []; return { students: own };
+  }
+  if (a === 'saveStudents') return withLock_(() => { adminOnly_(req.cred); return saveStudents_(req.section, req.names); });
+  // أسئلة المعلمة لتحدّي القمّة
+  if (a === 'getTeacherQuestions') return { questions: teacherQuestions_(req.grade) };
+  if (a === 'saveTeacherQuestion') return withLock_(() => saveTeacherQuestion_(req));
+  if (a === 'deleteTeacherQuestion') return withLock_(() => {
+    const data = rows_('TeacherQuestions');
+    const i = data.findIndex(r => String(r[0]) === String(req.id));
+    if (i < 0) return {};
+    gradeCheck_(req.cred, String(data[i][1]));
+    ss_().getSheetByName('TeacherQuestions').deleteRow(i + 2);
+    return {};
+  });
   if (a === 'passwords') { adminOnly_(req.cred); return { pw: passwords_() }; }
   if (a === 'setPassword') return withLock_(() => {
     adminOnly_(req.cred);
@@ -117,7 +159,85 @@ function bootstrap_() {
   }));
   const notes = {}; rows_('Notes').forEach(r => { if (r[0]) notes[String(r[0])] = String(r[1]); });
   const settings = {}; rows_('Settings').forEach(r => { if (r[0]) settings[String(r[0])] = String(r[1]); });
-  return { plans, errors, notes, settings };
+  const progress = rows_('Progress').filter(r => r[0]).map(r => ({
+    section: String(r[0]), entryId: String(r[1]), status: String(r[2]), upto: String(r[3] || ''),
+    at: r[4] instanceof Date ? r[4].toISOString() : String(r[4] || ''), by: String(r[5] || ''),
+  }));
+  return { plans, errors, notes, settings, progress };
+}
+
+/* ---------- التقدّم ---------- */
+function saveProgress_(req) {
+  const r = req.rec || {};
+  check_(req.cred, r.section);
+  if (!r.section || !r.entryId) fail_('بيانات التقدّم ناقصة');
+  const status = r.status === 'partial' ? 'partial' : 'done';
+  const upto = status === 'partial' ? String(r.upto || '') : '';
+  if (status === 'partial' && !/^\d{1,3}:\d{1,3}$/.test(upto)) fail_('حدّدي الآية التي وصلتِ إليها');
+  const sh = sheet_('Progress', PROGRESS_COLS);
+  const data = rows_('Progress');
+  const i = data.findIndex(x => String(x[0]) === String(r.section) && String(x[1]) === String(r.entryId));
+  const at = new Date();
+  const row = [String(r.section), String(r.entryId), status, upto, at, req.cred.role];
+  const rowNo = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+  sh.getRange(rowNo, 1, 1, 4).setNumberFormat('@');
+  sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
+  return { rec: { section: row[0], entryId: row[1], status, upto, at: at.toISOString(), by: req.cred.role } };
+}
+
+/* ---------- أسماء الطالبات ---------- */
+function studentsMap_() {
+  const m = {};
+  rows_('Students').forEach(r => { if (r[0]) { try { m[String(r[0])] = JSON.parse(String(r[1] || '[]')); } catch (e) { m[String(r[0])] = []; } } });
+  return m;
+}
+function saveStudents_(section, names) {
+  const valid = GRADE_IDS.some(g => LETTERS.some(l => g + '-' + l === String(section)));
+  if (!valid) fail_('شعبة غير معروفة');
+  const clean = (Array.isArray(names) ? names : []).map(n => String(n || '').replace(/\s+/g, ' ').trim().slice(0, 60)).filter(Boolean);
+  if (clean.length > MAX_NAMES) fail_('عدد الأسماء أكبر من المسموح (' + MAX_NAMES + ')');
+  const sh = sheet_('Students', STUDENTS_COLS);
+  const data = rows_('Students');
+  const i = data.findIndex(r => String(r[0]) === String(section));
+  if (!clean.length) { if (i >= 0) sh.deleteRow(i + 2); return { names: [] }; }
+  const row = [String(section), JSON.stringify(clean)];
+  const rng = i >= 0 ? sh.getRange(i + 2, 1, 1, 2) : sh.getRange(sh.getLastRow() + 1, 1, 1, 2);
+  rng.setNumberFormat('@'); rng.setValues([row]);
+  return { names: clean };
+}
+
+/* ---------- أسئلة المعلمة ---------- */
+// المديرة لكل الصفوف، والشعبة لصفّها فقط
+function gradeCheck_(cred, grade) {
+  const role = check_(cred);
+  if (role === 'section' && String(cred.id).split('-')[0] !== String(grade)) fail_('هذا الحساب لا يملك صلاحية هذا الصف');
+  return role;
+}
+function teacherQuestions_(grade) {
+  return rows_('TeacherQuestions').filter(r => r[0] && (!grade || String(r[1]) === String(grade))).map(r => {
+    let q = null; try { q = JSON.parse(String(r[4] || 'null')); } catch (e) { }
+    return { id: String(r[0]), grade: String(r[1]), entryId: String(r[2] || ''), page: String(r[3] || ''), q,
+      at: r[5] instanceof Date ? r[5].toISOString() : String(r[5] || ''), by: String(r[6] || '') };
+  }).filter(x => x.q);
+}
+function saveTeacherQuestion_(req) {
+  const r = req.rec || {};
+  if (GRADE_IDS.indexOf(String(r.grade)) < 0) fail_('صف غير معروف');
+  const role = gradeCheck_(req.cred, r.grade);
+  if (!r.entryId && !r.page) fail_('حدّدي اليوم أو الصفحة');
+  const txt = JSON.stringify(r.q || null);
+  if (!r.q || txt.length > CELL_LIMIT) fail_('السؤال غير صالح');
+  const sh = sheet_('TeacherQuestions', TQ_COLS);
+  const data = rows_('TeacherQuestions');
+  const i = r.id ? data.findIndex(x => String(x[0]) === String(r.id)) : -1;
+  if (i >= 0 && String(data[i][1]) !== String(r.grade)) gradeCheck_(req.cred, String(data[i][1]));
+  const id = i >= 0 ? String(data[i][0]) : 't' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  const at = new Date();
+  const row = [id, String(r.grade), String(r.entryId || ''), String(r.page || ''), txt, at, role];
+  const rowNo = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+  sh.getRange(rowNo, 1, 1, 5).setNumberFormat('@');
+  sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
+  return { rec: { id, grade: row[1], entryId: row[2], page: row[3], q: r.q, at: at.toISOString(), by: role } };
 }
 function normDate_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');

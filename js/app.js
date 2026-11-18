@@ -76,6 +76,7 @@ async function boot() {
     S.errors = boot.errors || [];
     S.notes = boot.notes || {};
     S.settings = boot.settings || {};
+    S.progress = boot.progress || [];
   } catch (e) {
     app().innerHTML = `<div class="landing"><div></div><div class="picker"><h2>تعذّر تحميل الموقع</h2><p>${esc(e.userMessage || 'تأكدي من الاتصال بالإنترنت ثم أعيدي تحميل الصفحة.')}</p><button class="btn primary" onclick="location.reload()">إعادة المحاولة</button></div><div></div></div>`;
     return;

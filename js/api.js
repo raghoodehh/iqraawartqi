@@ -30,6 +30,10 @@ const API = (() => {
       mem = { plans: {}, errors: [], notes: {}, settings: {}, pw: { admin: '1234' } };
       SECTIONS.forEach(s => { mem.pw[s.id] = '1111'; });
     }
+    // fields added later: keep older demo stores working
+    mem.progress = mem.progress || [];
+    mem.students = mem.students || {};
+    mem.tq = mem.tq || [];
     return mem;
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* in-memory only */ } }
@@ -46,11 +50,19 @@ const API = (() => {
     fail('يلزم تسجيل الدخول');
   }
   function adminOnly(db, cred) { if (checkCred(db, cred) !== 'admin') fail('هذه العملية للمديرة فقط'); }
+  // admin: any grade; section: its own grade only
+  function gradeCheck(db, cred, grade) {
+    const role = checkCred(db, cred);
+    if (role === 'section' && String(cred.id).split('-')[0] !== String(grade)) fail('هذا الحساب لا يملك صلاحية هذا الصف');
+    return role;
+  }
+  const MAX_NAMES = 80;
 
   const local = {
     bootstrap() {
       const db = load();
-      return { plans: db.plans, errors: db.errors, notes: db.notes, settings: db.settings };
+      // students are never returned here (bootstrap is public)
+      return { plans: db.plans, errors: db.errors, notes: db.notes, settings: db.settings, progress: db.progress };
     },
     login({ cred }) { const db = load(); return { role: checkCred(db, cred) }; },
     saveError({ cred, rec }) {
@@ -64,7 +76,63 @@ const API = (() => {
     deleteError({ cred, id }) { const db = load(); adminOnly(db, cred); db.errors = db.errors.filter(x => x.id !== id); save(); return { ok: true }; },
     savePlan({ cred, grade, entries }) { const db = load(); adminOnly(db, cred); db.plans[grade] = entries; save(); return { ok: true }; },
     saveNote({ cred, key, text }) { const db = load(); adminOnly(db, cred); if (text) db.notes[key] = text; else delete db.notes[key]; save(); return { ok: true }; },
-    saveSetting({ cred, key, value }) { const db = load(); adminOnly(db, cred); db.settings[key] = value; save(); return { ok: true }; },
+    saveSetting({ cred, key, value }) {
+      const db = load(); adminOnly(db, cred);
+      if (key === 'tajweed' && value) { try { JSON.parse(value); } catch (e) { fail('إعدادات الأحكام غير صالحة'); } }
+      if (value) db.settings[key] = value; else delete db.settings[key];
+      save(); return { ok: true };
+    },
+    // progress of each section through the plan
+    saveProgress({ cred, rec }) {
+      const db = load(); checkCred(db, cred, rec.section);
+      if (!rec.section || !rec.entryId) fail('بيانات التقدّم ناقصة');
+      const status = rec.status === 'partial' ? 'partial' : 'done';
+      const upto = status === 'partial' ? String(rec.upto || '') : '';
+      if (status === 'partial' && !/^\d{1,3}:\d{1,3}$/.test(upto)) fail('حدّدي الآية التي وصلتِ إليها');
+      let r = db.progress.find(x => x.section === rec.section && x.entryId === String(rec.entryId));
+      if (!r) { r = {}; db.progress.push(r); }
+      Object.assign(r, { section: rec.section, entryId: String(rec.entryId), status, upto, at: new Date().toISOString(), by: cred.role });
+      save(); return { rec: { ...r } };
+    },
+    deleteProgress({ cred, section, entryId }) {
+      const db = load(); checkCred(db, cred, section);
+      db.progress = db.progress.filter(x => !(x.section === section && x.entryId === String(entryId)));
+      save(); return { ok: true };
+    },
+    // student names (password-protected; never in bootstrap)
+    getStudents({ cred, section }) {
+      const db = load(); const role = checkCred(db, cred);
+      if (role === 'admin') return { students: section ? { [section]: db.students[section] || [] } : { ...db.students } };
+      return { students: { [cred.id]: db.students[cred.id] || [] } };
+    },
+    saveStudents({ cred, section, names }) {
+      const db = load(); adminOnly(db, cred);
+      if (!SECTIONS.some(s => s.id === section)) fail('شعبة غير معروفة');
+      const clean = (Array.isArray(names) ? names : []).map(n => String(n || '').replace(/\s+/g, ' ').trim().slice(0, 60)).filter(Boolean);
+      if (clean.length > MAX_NAMES) fail('عدد الأسماء أكبر من المسموح (' + MAX_NAMES + ')');
+      if (clean.length) db.students[section] = clean; else delete db.students[section];
+      save(); return { names: clean };
+    },
+    // teacher questions for «تحدّي القمّة»
+    getTeacherQuestions({ grade }) { const db = load(); return { questions: db.tq.filter(x => !grade || x.grade === String(grade)) }; },
+    saveTeacherQuestion({ cred, rec }) {
+      const db = load();
+      if (!GRADES.some(g => g.id === String(rec.grade))) fail('صف غير معروف');
+      const role = gradeCheck(db, cred, rec.grade);
+      if (!rec.entryId && !rec.page) fail('حدّدي اليوم أو الصفحة');
+      if (!rec.q) fail('السؤال غير صالح');
+      let r = rec.id && db.tq.find(x => x.id === rec.id);
+      if (r && r.grade !== String(rec.grade)) gradeCheck(db, cred, r.grade);
+      if (!r) { r = { id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }; db.tq.push(r); }
+      Object.assign(r, { grade: String(rec.grade), entryId: String(rec.entryId || ''), page: String(rec.page || ''), q: rec.q, at: new Date().toISOString(), by: role });
+      save(); return { rec: { ...r } };
+    },
+    deleteTeacherQuestion({ cred, id }) {
+      const db = load(); const r = db.tq.find(x => x.id === id);
+      if (!r) return { ok: true };
+      gradeCheck(db, cred, r.grade);
+      db.tq = db.tq.filter(x => x.id !== id); save(); return { ok: true };
+    },
     passwords({ cred }) { const db = load(); adminOnly(db, cred); return { pw: db.pw }; },
     setPassword({ cred, id, pw }) {
       const db = load(); adminOnly(db, cred);
