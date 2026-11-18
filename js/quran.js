@@ -21,7 +21,19 @@ const RULES = [
   { key: 'tarqiq', name: 'الترقيق', color: null, desc: '' },
 ];
 const RULE_PRIORITY = [6, 5, 4, 3, 7, 14, 11, 13, 12, 15, 16, 9, 10, 8, 0, 1, 2];
-const TEACH_RULES = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1];
+const TEACH_ALL = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 1];
+// rules the principal chose for the current grade (null = all). Set by setGradeRules().
+let TEACH_RULES = TEACH_ALL;
+let ALLOWED_RULES = null;
+// admin choices: the three grey rules are one item, «حروف لا تُنطق»
+const SILENT_RULES = [0, 1, 2];
+const RULE_ITEMS = [...TEACH_ALL.filter(r => r > 2).map(r => ({ id: String(r), name: RULES[r].name, rules: [r], color: RULES[r].color })),
+  { id: 'silent', name: 'حروف لا تُنطق', rules: SILENT_RULES, color: '#9a9a9a' }];
+function setGradeRules(list) {
+  ALLOWED_RULES = Array.isArray(list) ? new Set(list.map(Number)) : null;
+  TEACH_RULES = ALLOWED_RULES ? TEACH_ALL.filter(r => ALLOWED_RULES.has(r)) : TEACH_ALL;
+}
+const ruleOn = r => !ALLOWED_RULES || ALLOWED_RULES.has(r);
 
 const RECITERS = [
   { id: 'MaherAlMuaiqly128kbps', name: 'ماهر المعيقلي' },
@@ -97,11 +109,11 @@ const Q = {
 
 function wordRules(j) {
   const set = new Set();
-  (j || []).forEach(seg => seg[2].forEach(r => { if (RULES[r].color) set.add(r); }));
+  (j || []).forEach(seg => seg[2].forEach(r => { if (RULES[r].color && ruleOn(r)) set.add(r); }));
   return [...set];
 }
 function segColor(rules) {
-  for (const r of RULE_PRIORITY) if (rules.includes(r) && RULES[r].color) return RULES[r].color;
+  for (const r of RULE_PRIORITY) if (rules.includes(r) && RULES[r].color && ruleOn(r)) return RULES[r].color;
   return null;
 }
 // tajweed-coloured inner HTML for a word; optional onlyRule to colour just one rule

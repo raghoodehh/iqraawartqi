@@ -66,6 +66,11 @@ function entrySegs(list, idx) {
 function scoredEntries(grade) { return entries(grade).filter(e => SCORED.includes(e.type)); }
 function recOf(section, entryId) { return S.errors.find(r => r.section === section && r.entryId === entryId); }
 
+/* ---------- tajweed rules chosen for each grade (Settings.tajweed) ---------- */
+function tajweedMap() { try { return JSON.parse(S.settings.tajweed || '{}') || {}; } catch (e) { return {}; } }
+// array of rule indexes for the grade, or null = all rules (the default)
+function gradeRules(grade) { const v = tajweedMap()[grade]; return Array.isArray(v) ? v : null; }
+
 /* ---------- section progress through the plan ---------- */
 function progOf(section, entryId) { return (S.progress || []).find(r => r.section === section && r.entryId === String(entryId)); }
 function localDay(iso) { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
@@ -206,6 +211,7 @@ function sections(grade) {
 function openLesson(sectionId) {
   store.set('iqra-last', sectionId);
   const grade = sectionId.split('-')[0];
+  setGradeRules(gradeRules(grade));
   const list = entries(grade);
   const free = !!gradeOf(grade).free || !list.length;
   S.lesson = {
@@ -552,7 +558,7 @@ async function panelTafsir(sel, keys) {
     <div style="display:flex;justify-content:space-between;gap:8px"><button class="btn sm" ${i > 0 ? `data-go-ayah="${keys[i - 1]}"` : 'disabled'}>${arrow('r')}الآية السابقة</button><button class="btn sm" ${i >= 0 && i < keys.length - 1 ? `data-go-ayah="${keys[i + 1]}"` : 'disabled'}>الآية التالية${arrow('l')}</button></div>`;
 }
 async function panelRules(sel) {
-  const legend = `<div class="legend">${TEACH_RULES.filter(r => r > 2).map(r => `<span><i style="background:${RULES[r].color}"></i>${RULES[r].name}</span>`).join('')}<span><i style="background:#9a9a9a"></i>لا يُنطق</span></div>`;
+  const legend = `<div class="legend">${TEACH_RULES.filter(r => r > 2).map(r => `<span><i style="background:${RULES[r].color}"></i>${RULES[r].name}</span>`).join('')}${ruleOn(0) ? '<span><i style="background:#9a9a9a"></i>لا يُنطق</span>' : ''}</div>`;
   if (!sel) return '<p class="muted">اضغطي على أي آية لعرض أحكامها.</p>' + legend;
   const [s, a] = sel.split(':').map(Number);
   const words = await Q.ayahWords(sel);
@@ -561,7 +567,7 @@ async function panelRules(sel) {
   const order = RULE_PRIORITY.filter(r => by[r]);
   const rows = order.map(r => `<div class="rule-row"><span class="rule-dot" style="background:${RULES[r].color}"></span><b>${RULES[r].name}</b>
     <div class="words">${by[r].map(w => `<span>${tajweedHTML(w.t, w.j, r)}</span>`).join('')}</div><p>${esc(RULES[r].desc)}</p></div>`).join('');
-  return `<h3>أحكام الآية ${toAr(a)} من سورة ${esc(Q.suraName(s))}</h3>${rows || '<p class="muted">لا توجد أحكام مميزة في هذه الآية.</p>'}
+  return `<h3>أحكام الآية ${toAr(a)} من سورة ${esc(Q.suraName(s))}</h3>${rows || `<p class="muted">${ALLOWED_RULES ? 'لا توجد في هذه الآية أحكام من الأحكام المقرّرة لهذا الصف.' : 'لا توجد أحكام مميزة في هذه الآية.'}</p>`}
     <p class="muted" style="font-size:.85rem;margin:0">فعّلي «ألوان التجويد» لتلوين الأحكام في الصفحة كلها.</p>${legend}`;
 }
 async function panelMeanings(keys) {
@@ -856,11 +862,11 @@ function admin(tab = 'plans') {
   if (!S.admin) { home(); adminLoginModal(() => admin(tab)); return; }
   app().innerHTML = `<div class="page-screen"><div class="bar"><div class="who">${logoSVG()}<span class="chip">لوحة الإدارة</span></div>
     <div class="actions" style="margin-inline-start:auto"><button class="btn" data-home>الرئيسية</button><button class="btn danger" data-out>تسجيل الخروج</button></div></div>
-    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
+    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['tajweed', 'أحكام التجويد'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
   app().querySelector('[data-home]').onclick = home;
   app().querySelector('[data-out]').onclick = () => { S.admin = null; store.sset('iqra-admin', null); home(); };
   app().querySelectorAll('[data-t]').forEach(b => b.onclick = () => admin(b.dataset.t));
-  ({ plans: adminPlans, track: adminTrack, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
+  ({ plans: adminPlans, track: adminTrack, tajweed: adminTajweed, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
 }
 
 /* ---------- class tracking (principal only) ---------- */
@@ -1024,6 +1030,46 @@ function adminTrack() {
   }
   draw();
 }
+/* ---------- tajweed rules per grade (principal) ---------- */
+function adminTajweed() {
+  const host = $('#adm');
+  const all = RULE_ITEMS.flatMap(it => it.rules);
+  // working copy: grade -> Set of rule indexes (missing = all)
+  const sel = {}; GRADES.forEach(g => { const v = gradeRules(g.id); sel[g.id] = new Set(v || all); });
+  let dirty = false;
+  const has = (g, it) => it.rules.every(r => sel[g].has(r));
+  const draw = () => {
+    host.innerHTML = `<p class="muted" style="margin:0">اختاري الأحكام التي تدرسها كل مرحلة. الصف الذي يبقى «كل الأحكام» يعمل كما الآن. تؤثّر الاختيارات على «ألوان التجويد» وتبويب «الأحكام» والتحديات واستراتيجيات الحصة.</p>
+      <div class="filters"><div class="field"><label for="tj-from">نسخ اختيارات صف</label><select id="tj-from">${GRADES.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></div>
+        <div class="field"><label for="tj-to">إلى</label><select id="tj-to"><option value="*">كل الصفوف الأخرى</option>${GRADES.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></div>
+        <button class="btn" data-copy style="min-height:46px">نسخ</button>
+        <button class="btn primary" data-save style="min-height:46px;margin-inline-start:auto">${dirty ? 'حفظ التغييرات ●' : 'حفظ'}</button></div>
+      <div class="table-wrap"><table class="tj-table"><thead><tr><th>الحكم</th>${GRADES.map(g => `<th><div>${esc(g.name)}</div><div class="tj-col">${sel[g.id].size === all.length ? '<span class="muted">كل الأحكام</span>' : `<span class="num">${toAr(RULE_ITEMS.filter(it => has(g.id, it)).length)}</span>`}</div>
+          <div class="tj-col"><button class="btn sm ghost" data-allg="${g.id}">الكل</button><button class="btn sm ghost" data-noneg="${g.id}">لا شيء</button></div></th>`).join('')}</tr></thead><tbody>
+        ${RULE_ITEMS.map(it => `<tr><th scope="row"><span class="rule-dot" style="background:${it.color}"></span> ${esc(it.name)}</th>${GRADES.map(g => `<td><label class="tj-cell"><input type="checkbox" data-g="${g.id}" data-it="${it.id}" ${has(g.id, it) ? 'checked' : ''} aria-label="${esc(it.name)} – ${esc(g.name)}"></label></td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>`;
+    host.querySelectorAll('input[data-it]').forEach(cb => cb.onchange = () => {
+      const it = RULE_ITEMS.find(x => x.id === cb.dataset.it); const s = sel[cb.dataset.g];
+      it.rules.forEach(r => cb.checked ? s.add(r) : s.delete(r)); dirty = true; draw();
+    });
+    host.querySelectorAll('[data-allg]').forEach(b => b.onclick = () => { sel[b.dataset.allg] = new Set(all); dirty = true; draw(); });
+    host.querySelectorAll('[data-noneg]').forEach(b => b.onclick = () => { sel[b.dataset.noneg] = new Set(); dirty = true; draw(); });
+    host.querySelector('[data-copy]').onclick = () => {
+      const from = $('#tj-from', host).value, to = $('#tj-to', host).value;
+      GRADES.forEach(g => { if (g.id !== from && (to === '*' || to === g.id)) sel[g.id] = new Set(sel[from]); });
+      dirty = true; draw(); toast(`نُسخت اختيارات ${gradeOf(from).name}. اضغطي «حفظ» لاعتمادها.`);
+    };
+    host.querySelector('[data-save]').onclick = async () => {
+      const out = {};
+      GRADES.forEach(g => { if (sel[g.id].size !== all.length) out[g.id] = [...sel[g.id]].sort((a, b) => a - b); });
+      const value = Object.keys(out).length ? JSON.stringify(out) : '';
+      try { await API.call('saveSetting', { cred: S.admin, key: 'tajweed', value }); if (value) S.settings.tajweed = value; else delete S.settings.tajweed; dirty = false; draw(); toast('تم حفظ أحكام الصفوف'); }
+      catch (e) { toast(e.userMessage || 'تعذّر الحفظ'); }
+    };
+  };
+  draw();
+}
+
 function addDays(iso, n) { const d = parseISO(iso); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
 function dayName(iso) { const d = parseISO(iso); return d ? WEEKDAYS[d.getDay()] : ''; }

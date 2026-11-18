@@ -75,6 +75,7 @@ const Games = {
     const present = rules.filter(x => x !== r && !sameFamily(x, r));
     const others = shuffle(TEACH_RULES.filter(x => x !== r && !sameFamily(x, r)));
     const opts = shuffle([r, ...shuffle(present).slice(0, 2), ...others].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4));
+    if (opts.length < 2) return this.empty('ما الحكم؟', 'أحكام هذا الصف قليلة، فلا توجد خيارات كافية لهذا التحدي.');
     const box = this.shell('ما الحكم؟', 'ما حكم التجويد في الموضع الملوّن؟');
     box.innerHTML = `<div class="big-word">${tajweedHTML(w.t, w.j, r)}</div><div class="muted">${esc(Q.suraName(+w.key.split(':')[0]))} – الآية ${toAr(w.key.split(':')[1])}</div>
       <div class="opts">${opts.map(o => `<button class="opt" data-r="${o}">${RULES[o].name}</button>`).join('')}</div><div class="explain" hidden></div>`;
@@ -150,8 +151,9 @@ const Games = {
     const rules = Object.keys(occ).map(Number).filter(r => r !== 1);
     shuffle(rules).slice(0, 3).forEach((r, i) => {
       const w = pick(occ[r]);
-      const truth = i % 2 === 1;
-      const fake = pick(TEACH_RULES.filter(x => x !== r && !wordRules(w.j).includes(x) && !sameFamily(x, r)));
+      const fakes = TEACH_RULES.filter(x => x !== r && !wordRules(w.j).includes(x) && !sameFamily(x, r));
+      const fake = fakes.length ? pick(fakes) : null;
+      const truth = i % 2 === 1 || fake == null;
       st.push({ html: `في كلمة <span class="qw">${esc(w.t)}</span> حكم: ${RULES[truth ? r : fake].name}`, truth, why: `في كلمة <span class="qw">${tajweedHTML(w.t, w.j, r)}</span> حكم ${RULES[r].name}` });
     });
     if (!st.length) return this.empty('صح أم خطأ', 'لا توجد عبارات كافية لهذا المقطع.');
