@@ -94,11 +94,12 @@ const Strat = {
       { id: 'box', name: 'الصندوق الغامض', desc: '١٨ صندوقاً خلف كل منها سؤال. أجيبي ثم قرّري: تحتفظين بالصندوق أم تعطينه لفريق آخر؟ النقاط قد تزيد أو تنقص!' },
       { id: 'snake', name: 'السلّم والحيّة', desc: 'ارمي النرد وأجيبي عن السؤال لتتقدّمي. السلالم ترفعك والحيّات تُنزلك. أول فريق يصل إلى ٣٠ يفوز.' },
       { id: 'xo', name: 'إكس – أو', desc: 'فريقان. خلف كل خانة سؤال، والإجابة الصحيحة تحجز الخانة. ثلاث خانات في صف واحد تعني الفوز.' },
+      { id: 'qimma', name: 'تحدّي القمّة ⛰️', desc: 'كل طالبة تجيب من التابلت بمسح رمز QR، والمتسلّقات يصعدن الجبل حسب النقاط. تراجعين الأسئلة قبل البدء.' },
       { id: 'bank', name: 'بنك الأسئلة', desc: 'كل الأسئلة المولَّدة من صفحات الأسبوع مع إجاباتها، لتراجعها المعلمة قبل الحصة.' },
     ];
     this.host.innerHTML = `<div class="game" style="gap:12px"><h2>استراتيجيات حصة القرآن</h2><div class="prompt">${esc(this.label)} · ${toAr(this.bank.length)} سؤالاً جاهزاً</div></div>
       <div class="game-menu">${games.map(g => `<button class="game-card" data-s="${g.id}"><b>${g.name}</b><span>${g.desc}</span></button>`).join('')}</div>`;
-    this.host.querySelectorAll('[data-s]').forEach(b => b.onclick = () => b.dataset.s === 'bank' ? this.showBank() : this.setup(b.dataset.s));
+    this.host.querySelectorAll('[data-s]').forEach(b => b.onclick = () => b.dataset.s === 'bank' ? this.showBank() : b.dataset.s === 'qimma' ? Qimma.open() : this.setup(b.dataset.s));
   },
   setup(game) {
     const fixed = game === 'xo' ? 2 : null;

@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>تحدّي القمّة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sky1:#2a7fd4; --sky2:#8fd3ff; --ink:#1d2b4f; --card:#ffffff;
+  --red:#e21b3c; --blue:#1368ce; --yellow:#d89e00; --green:#26890c;
+  --gold:#ffc83d; --gold2:#ff9f1c; --ok:#2bb24c; --bad:#e5383b;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:'Cairo',system-ui,sans-serif;color:var(--ink);background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 70%,#d8f1ff 100%);overflow:hidden;user-select:none;-webkit-user-select:none}
+button{font-family:inherit;cursor:pointer;border:none}
+input{font-family:inherit}
+#app{position:relative;width:100vw;height:100vh;height:100dvh;overflow:hidden}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+@font-face{font-family:'HafsMushaf';src:url('fonts/Hafs.woff2') format('woff2');font-display:swap}
+.quran{font-family:'HafsMushaf','Amiri Quran','Amiri','Traditional Arabic',serif;line-height:2.1}
+/* اقرأ وارتقِ: اختيار الاسم من قائمة الشعبة */
+.names-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;width:min(94vw,820px);max-height:42vh;overflow:auto;padding:4px}
+.name-pick{background:#fff;border-radius:16px;padding:12px 8px;font-size:clamp(16px,2.2vw,22px);font-weight:700;box-shadow:0 4px 0 #a9c8e6;color:var(--ink)}
+.name-pick.sel{box-shadow:0 0 0 5px var(--gold2),0 6px 14px rgba(0,0,0,.25)}
+.name-pick[disabled]{opacity:.35;cursor:not-allowed;text-decoration:line-through}
+.quran mark{background:linear-gradient(transparent 15%,#fff07a 15%,#ffe14d 85%,transparent 85%);color:#a3001b;border-radius:6px;padding:0 .15em}
+
+/* ---------- خلفية الجبال ---------- */
+.bg-mtn{position:absolute;inset:auto 0 0 0;height:55%;pointer-events:none;opacity:.9}
+.cloud{position:absolute;background:#fff;border-radius:100px;opacity:.85;filter:drop-shadow(0 6px 8px rgba(0,40,90,.15));animation:drift linear infinite}
+.cloud::before,.cloud::after{content:'';position:absolute;background:#fff;border-radius:50%}
+.cloud::before{width:55%;height:160%;top:-70%;right:15%}
+.cloud::after{width:40%;height:120%;top:-45%;left:12%}
+@keyframes drift{from{transform:translateX(-30vw)}to{transform:translateX(130vw)}}
+
+/* ---------- أزرار عامة ---------- */
+.btn{white-space:nowrap;background:linear-gradient(180deg,#ffd75e,#ffb020);color:#4a2a00;font-weight:900;font-size:clamp(18px,2.2vw,34px);padding:.45em 1.4em;border-radius:18px;box-shadow:0 6px 0 #c47a00,0 10px 20px rgba(0,0,0,.2);transition:transform .1s}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 #c47a00}
+.btn:disabled{filter:grayscale(1);opacity:.55;cursor:default}
+.btn.green{background:linear-gradient(180deg,#5fe07a,#22a845);color:#fff;box-shadow:0 6px 0 #137a2e,0 10px 20px rgba(0,0,0,.2)}
+.btn.ghost{background:rgba(255,255,255,.9);color:var(--ink);box-shadow:0 4px 0 rgba(0,0,0,.15)}
+.icon-btn{position:fixed;z-index:50;top:12px;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.85);font-size:22px;box-shadow:0 3px 10px rgba(0,0,0,.2)}
+
+/* ---------- الشريط العلوي للوحة ---------- */
+.topbar{display:flex;align-items:center;gap:16px;padding:12px 80px 12px 24px;color:#fff;font-weight:900;font-size:clamp(16px,1.8vw,28px);text-shadow:0 2px 4px rgba(0,0,0,.25);z-index:2}
+.topbar .logo{font-size:1.2em}
+.pill{background:rgba(255,255,255,.95);color:var(--ink);border-radius:999px;padding:.15em .9em;text-shadow:none;box-shadow:0 3px 8px rgba(0,0,0,.15)}
+.pill.gold{background:linear-gradient(180deg,#ffe27a,#ffb020);color:#5a3500}
+.spacer{flex:1}
+
+/* ---------- شاشة الإعداد ---------- */
+.setup{align-items:center;justify-content:center;gap:2.4vh;text-align:center;z-index:1}
+.title-big{font-size:clamp(34px,5.5vw,84px);font-weight:900;color:#fff;text-shadow:0 5px 0 #0f4f94,0 10px 25px rgba(0,0,0,.25);line-height:1.2}
+.subtitle{font-size:clamp(18px,2.2vw,32px);color:#fff;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,.3)}
+.class-grid{display:flex;gap:1.4vw;flex-wrap:wrap;justify-content:center}
+.class-btn{background:#fff;color:var(--ink);font-weight:900;font-size:clamp(22px,2.8vw,44px);padding:.5em 1em;border-radius:22px;box-shadow:0 7px 0 #9cc7ea,0 12px 25px rgba(0,0,0,.18);transition:transform .12s}
+.class-btn:hover{transform:translateY(-4px) rotate(-1deg)}
+.class-btn:active{transform:translateY(3px)}
+.class-btn small{display:block;font-size:.45em;color:#5a6f96;font-weight:700}
+.settings{display:flex;gap:12px;align-items:center;background:rgba(255,255,255,.9);border-radius:16px;padding:10px 18px;font-weight:700;font-size:clamp(14px,1.4vw,22px)}
+.settings select{font-family:inherit;font-size:1em;padding:4px 10px;border-radius:10px;border:2px solid #b8d3ee}
+.warn{background:#fff3cd;color:#7a5200;border-radius:14px;padding:10px 18px;font-weight:700;max-width:80vw;font-size:clamp(13px,1.3vw,20px)}
+
+/* ---------- الردهة ---------- */
+.lobby{display:flex;flex-direction:row;padding:0 2vw 2vh;gap:2vw;flex:1;min-height:0}
+.qr-card{background:#fff;border-radius:28px;padding:2vh 2vw;display:flex;flex-direction:column;align-items:center;gap:1vh;box-shadow:0 10px 30px rgba(0,0,0,.2);width:min(36vw,62vh)}
+.qr-card .cls{font-size:clamp(28px,4vw,64px);font-weight:900;color:var(--blue);line-height:1.1}
+.qr-card .qr{width:100%;aspect-ratio:1}
+.qr-card .qr svg{width:100%;height:100%}
+.qr-card .hint{font-weight:700;font-size:clamp(14px,1.5vw,24px);text-align:center}
+.qr-card .url{font-size:12px;color:#7a8bab;direction:ltr;word-break:break-all;text-align:center}
+.lobby-side{flex:1;display:flex;flex-direction:column;gap:1.5vh;min-width:0}
+.count-box{display:flex;align-items:center;gap:16px;color:#fff;font-weight:900;font-size:clamp(22px,3vw,48px);text-shadow:0 3px 6px rgba(0,0,0,.25)}
+.count-box .num{background:#fff;color:var(--blue);border-radius:20px;padding:0 .5em;text-shadow:none;min-width:2em;text-align:center}
+.players{flex:1;background:rgba(255,255,255,.25);border:3px dashed rgba(255,255,255,.8);border-radius:24px;padding:1.5vh 1vw;display:flex;flex-wrap:wrap;align-content:flex-start;gap:10px;overflow:auto}
+.chip{display:flex;align-items:center;gap:8px;background:#fff;border-radius:999px;padding:4px 16px 4px 6px;font-weight:700;font-size:clamp(15px,1.5vw,24px);box-shadow:0 4px 10px rgba(0,0,0,.12);animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.chip.off{opacity:.45}
+.chip .x{color:#c33;font-size:.8em;margin-right:4px;opacity:0;transition:opacity .2s}
+.chip:hover .x{opacity:1}
+@keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+.av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;flex:none;line-height:1}
+.empty-msg{width:100%;text-align:center;color:#fff;font-weight:700;font-size:clamp(16px,1.8vw,28px);margin-top:8vh;text-shadow:0 2px 4px rgba(0,0,0,.25)}
+
+/* ---------- بطاقة المرحلة ---------- */
+.stage-card{margin:auto;background:#fff;border-radius:36px;padding:5vh 6vw;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.25);animation:stageIn .7s cubic-bezier(.3,1.5,.5,1)}
+@keyframes stageIn{from{transform:translateY(60px) scale(.7);opacity:0}to{transform:none;opacity:1}}
+.stage-card .flag{font-size:clamp(50px,8vw,120px)}
+.stage-card h1{font-size:clamp(36px,5.5vw,90px);font-weight:900;color:var(--blue);line-height:1.2}
+.stage-card h2{font-size:clamp(20px,2.6vw,42px);color:#e07a00;font-weight:900}
+.stage-card p{font-size:clamp(16px,2vw,32px);font-weight:700;margin:1.5vh 0 3vh;color:#4a5a7a}
+
+/* ---------- السؤال ---------- */
+.q-wrap{flex:1;display:flex;flex-direction:column;padding:0 2vw 2vh;gap:1.6vh;min-height:0}
+.q-head{display:flex;gap:2vw;align-items:stretch}
+.q-box{flex:1;background:#fff;border-radius:24px;padding:1.6vh 2vw;box-shadow:0 8px 25px rgba(0,0,0,.18);display:flex;flex-direction:column;justify-content:center;gap:.6vh}
+.q-type{align-self:flex-start;background:#e8f2ff;color:var(--blue);font-weight:900;border-radius:999px;padding:2px 14px;font-size:clamp(13px,1.3vw,22px)}
+.q-text{font-weight:900;font-size:clamp(22px,2.7vw,46px);line-height:1.35}
+.q-ayah{font-size:clamp(26px,3.3vw,56px);text-align:center;color:#123}
+.q-ayah .ref{font-size:.55em;color:#7a6a3a}
+.timer{width:clamp(90px,10vw,170px);aspect-ratio:1;position:relative;flex:none;align-self:center}
+.timer svg{width:100%;height:100%;transform:rotate(-90deg)}
+.timer .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:clamp(30px,3.6vw,64px);color:#fff;text-shadow:0 3px 6px rgba(0,0,0,.3)}
+.timer.hurry .t{color:#ffe14d;animation:pulse .5s infinite alternate}
+@keyframes pulse{to{transform:scale(1.15)}}
+.answered{color:#fff;font-weight:900;text-align:center;font-size:clamp(14px,1.4vw,24px);text-shadow:0 2px 4px rgba(0,0,0,.3)}
+.answered b{font-size:1.6em;display:block;line-height:1}
+.opts{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:1.4vh 1.2vw;min-height:0}
+.opt{position:relative;border-radius:20px;color:#fff;display:flex;align-items:center;gap:1vw;padding:0 1.6vw;font-weight:900;font-size:clamp(20px,2.6vw,44px);box-shadow:0 7px 0 rgba(0,0,0,.25);transition:opacity .4s,transform .4s,filter .4s;min-height:0;text-align:right}
+.opt .shape{font-size:1.2em;flex:none;width:1.4em;text-align:center;filter:drop-shadow(0 2px 2px rgba(0,0,0,.3))}
+.opt.c0{background:var(--red)}.opt.c1{background:var(--blue)}.opt.c2{background:var(--yellow)}.opt.c3{background:var(--green)}
+.opt.dim{opacity:.28;filter:grayscale(.6)}
+.opt.right{transform:scale(1.03);box-shadow:0 0 0 6px #fff,0 0 0 11px var(--ok),0 12px 30px rgba(0,0,0,.3)}
+.opt .cnt{margin-right:auto;background:rgba(0,0,0,.25);border-radius:12px;padding:0 .5em;font-size:.8em}
+.opt .tick{position:absolute;left:-14px;top:-14px;width:1.5em;height:1.5em;border-radius:50%;background:#fff;color:var(--ok);display:flex;align-items:center;justify-content:center;font-size:.8em;box-shadow:0 3px 8px rgba(0,0,0,.3)}
+.golden-banner{background:linear-gradient(90deg,#ffe27a,#ffb020,#ffe27a);background-size:200% 100%;animation:shine 2s linear infinite;color:#5a3500;font-weight:900;border-radius:999px;padding:2px 16px;font-size:clamp(14px,1.4vw,24px)}
+@keyframes shine{to{background-position:-200% 0}}
+.exp{background:#fff;border-radius:20px;padding:1.4vh 2vw;font-weight:700;font-size:clamp(17px,2vw,32px);box-shadow:0 8px 25px rgba(0,0,0,.18);border-right:12px solid var(--ok);animation:fadeIn .5s}
+.exp b{color:var(--ok)}
+.bottom-row{display:flex;align-items:center;gap:16px;justify-content:flex-start}
+
+/* ---------- الجبل ---------- */
+.board{flex:1;display:flex;gap:1.5vw;padding:0 1.5vw 1.5vh;min-height:0}
+.mtn-area{flex:1;position:relative;min-width:0;display:flex;align-items:flex-end;justify-content:center}
+.mtn-box{position:relative;width:100%;max-height:100%;aspect-ratio:1000/600}
+.mtn-box svg{position:absolute;inset:0;width:100%;height:100%}
+.climber{position:absolute;transform:translate(-50%,-100%);transition:left 1.8s cubic-bezier(.45,.05,.3,1),top 1.8s cubic-bezier(.45,.05,.3,1);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.climber .av{box-shadow:0 0 0 3px #fff,0 4px 10px rgba(0,0,0,.35)}
+.climber .nm{background:rgba(255,255,255,.95);border-radius:8px;padding:0 6px;font-weight:700;font-size:clamp(9px,.85vw,15px);margin-top:3px;white-space:nowrap;max-width:9vw;overflow:hidden;text-overflow:ellipsis;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.climber.top1 .av{box-shadow:0 0 0 4px var(--gold),0 0 18px var(--gold)}
+.climber .crown{position:absolute;top:-.9em;font-size:1.3em}
+.climber.bounce .av{animation:climbBounce .3s 6 alternate}
+@keyframes climbBounce{to{transform:translateY(-6px) rotate(6deg)}}
+.lb{width:min(30vw,440px);background:rgba(255,255,255,.96);border-radius:24px;padding:1.6vh 1.2vw;box-shadow:0 10px 30px rgba(0,0,0,.2);display:flex;flex-direction:column;gap:.9vh;align-self:center}
+.lb h3{text-align:center;font-weight:900;font-size:clamp(18px,2vw,32px);color:var(--blue)}
+.lb-row{display:flex;align-items:center;gap:.7vw;background:#f1f6fd;border-radius:14px;padding:.6vh .7vw;font-weight:700;font-size:clamp(14px,1.5vw,26px);animation:slideIn .5s both}
+.lb-row:nth-child(2){background:linear-gradient(90deg,#fff6d6,#ffe9a0)}
+.lb-row .rk{width:1.6em;text-align:center;font-weight:900}
+.lb-row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-row .sc{font-weight:900;color:var(--blue)}
+.lb-row .mv{font-size:.75em;width:2.2em;text-align:center}
+.mv.up{color:var(--ok)}.mv.down{color:var(--bad)}.mv.same{color:#aab}
+@keyframes slideIn{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:none}}
+
+/* ---------- النهاية ---------- */
+.final{align-items:center;justify-content:flex-end;padding-bottom:2vh}
+.podium{display:flex;align-items:flex-end;gap:1.5vw;margin-bottom:1vh}
+.pod{display:flex;flex-direction:column;align-items:center;width:min(20vw,300px)}
+.pod .who{display:flex;flex-direction:column;align-items:center;opacity:0;animation:rise .8s cubic-bezier(.3,1.5,.5,1) forwards}
+.pod .who .nm{font-weight:900;font-size:clamp(18px,2.2vw,36px);color:#fff;text-shadow:0 3px 6px rgba(0,0,0,.35);text-align:center;line-height:1.2;margin-top:6px}
+.pod .who .sc{font-weight:900;color:#fff3b0;font-size:clamp(14px,1.6vw,26px);text-shadow:0 2px 4px rgba(0,0,0,.3)}
+.pod .block{width:100%;border-radius:18px 18px 0 0;display:flex;justify-content:center;padding-top:1vh;font-weight:900;font-size:clamp(40px,6vw,96px);color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.2);transform-origin:bottom;animation:grow .8s ease-out both}
+.pod.p1 .block{height:34vh;background:linear-gradient(180deg,#ffd75e,#e39a00)}
+.pod.p2 .block{height:24vh;background:linear-gradient(180deg,#e9eef5,#a9b6c8)}
+.pod.p3 .block{height:16vh;background:linear-gradient(180deg,#f3b07a,#c26a2b)}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes rise{from{opacity:0;transform:translateY(40px) scale(.5)}to{opacity:1;transform:none}}
+.final-list{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:90vw;max-height:14vh;overflow:auto}
+.final-list .chip{animation:none;font-size:clamp(12px,1.2vw,20px)}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:40}
+
+/* ---------- واجهة الطالبة ---------- */
+.st{align-items:center;justify-content:safe center;padding:3vh 4vw;gap:2.2vh;text-align:center;overflow:auto}
+.st .cls-pill{background:#fff;color:var(--blue);font-weight:900;border-radius:999px;padding:4px 22px;font-size:22px;box-shadow:0 4px 10px rgba(0,0,0,.15)}
+.st h2{color:#fff;font-weight:900;font-size:clamp(22px,4vw,38px);text-shadow:0 3px 6px rgba(0,0,0,.25)}
+.av-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:min(92vw,560px)}
+.av-pick{background:#fff;border-radius:20px;aspect-ratio:1;font-size:clamp(34px,8vw,56px);display:flex;align-items:center;justify-content:center;box-shadow:0 5px 0 #a9c8e6;transition:transform .15s}
+.av-pick.sel{transform:scale(1.08);box-shadow:0 0 0 5px var(--gold2),0 6px 14px rgba(0,0,0,.25)}
+.name-in{width:min(92vw,560px);font-size:28px;font-weight:700;text-align:center;border-radius:18px;border:4px solid #fff;padding:10px;outline:none;box-shadow:0 5px 0 #a9c8e6}
+.name-in:focus{border-color:var(--gold2)}
+.me-big{display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.95);border-radius:28px;padding:24px 40px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.me-big .nm{font-size:28px;font-weight:900}
+.st p.info{color:#fff;font-weight:700;font-size:22px;text-shadow:0 2px 4px rgba(0,0,0,.25)}
+.st-q{padding:2vh 3vw;gap:1.6vh;justify-content:flex-start}
+.st-q .q-box{width:100%;flex:none}
+.st-q .q-text{font-size:clamp(18px,3.4vw,30px)}
+.st-q .q-ayah{font-size:clamp(20px,4vw,34px)}
+.st-opts{flex:1;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:40vh}
+.st-opts .opt{font-size:clamp(18px,3.6vw,34px);justify-content:center;flex-direction:column;gap:6px;padding:10px;text-align:center}
+.st-opts .opt .shape{font-size:1.6em}
+.st-opts .opt:active{transform:scale(.96)}
+.st-bar{width:100%;height:14px;background:rgba(255,255,255,.4);border-radius:10px;overflow:hidden;flex:none}
+.st-bar div{height:100%;background:linear-gradient(90deg,#ffd75e,#ff9f1c);border-radius:10px}
+.st-top{display:flex;width:100%;justify-content:space-between;align-items:center;color:#fff;font-weight:900;font-size:20px;text-shadow:0 2px 4px rgba(0,0,0,.25)}
+.res{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vh;color:#fff;text-align:center;padding:4vw}
+.res.ok{background:radial-gradient(circle at 50% 40%,#5fe07a,#1a8f37)}
+.res.bad{background:radial-gradient(circle at 50% 40%,#ff7a7a,#b3142e)}
+.res.late{background:radial-gradient(circle at 50% 40%,#9aa9c4,#4b5a7a)}
+.res .big{font-size:clamp(70px,18vw,150px);line-height:1;animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+.res h1{font-size:clamp(30px,7vw,60px);font-weight:900;text-shadow:0 3px 6px rgba(0,0,0,.2)}
+.res .pts{background:rgba(0,0,0,.2);border-radius:20px;padding:6px 26px;font-size:clamp(26px,6vw,48px);font-weight:900}
+.res .rank{font-size:clamp(20px,4.5vw,32px);font-weight:700}
+.res .streak{background:#ff9f1c;border-radius:999px;padding:4px 18px;font-weight:900;font-size:22px}
+.spinner{width:60px;height:60px;border-radius:50%;border:7px solid rgba(255,255,255,.4);border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (min-aspect-ratio:1/1){.av-grid{grid-template-columns:repeat(8,1fr);width:min(94vw,820px)}.av-pick{font-size:clamp(30px,5vw,48px)}}
+.modal-bg{position:fixed;inset:0;background:rgba(10,30,60,.55);display:flex;align-items:center;justify-content:center;z-index:60}
+.modal{background:#fff;border-radius:26px;padding:30px 40px;text-align:center;display:flex;flex-direction:column;gap:20px;max-width:90vw;font-weight:700;font-size:clamp(18px,2vw,28px)}
+.modal .row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<canvas id="confetti"></canvas>
+<script src="js/vendor/peerjs.min.js"></script>
+<script>if (!new URLSearchParams(location.search).has('join')) document.write('<script src="js/vendor/qrcode.js"><\/script>');</script>
+<script>
+// ====== اقرأ وارتقِ: الأسئلة تأتي من شاشة المراجعة في الموقع (لا توجد أسئلة ثابتة) ======
+// a = رقم الإجابة الصحيحة في opts (يبدأ من 0) ، [[...]] = الكلمات المظلّلة ، golden = سؤال ذهبي
+const QIMMA = new URLSearchParams(location.search).has('join') ? null : (() => { try { return JSON.parse(localStorage.getItem('iqra-qimma-game')); } catch (e) { return null; } })();
+const STAGES = QIMMA ? QIMMA.stages : [];
+const QUESTIONS = QIMMA ? QIMMA.questions : [];
+</script>
+<script>'use strict';
+/* =====================================================================
+   تحدّي القمّة — لعبة صفّية تنافسية (لوحة المعلمة + أجهزة الطالبات)
+   ===================================================================== */
+// اقرأ وارتقِ: الشعبة تأتي من الموقع (key بحروف لاتينية لأن PeerJS لا يقبل غيرها)
+const CLASSES = QIMMA ? [{ key: QIMMA.key, name: QIMMA.sectionName }] : [];
+const NAMES = QIMMA && Array.isArray(QIMMA.names) ? QIMMA.names : [];
+const inFrame = window.parent && window.parent !== window;
+function exitToSite() { if (inFrame) window.parent.postMessage({ t: 'qimma-exit' }, location.origin); else location.href = './'; }
+const AVATARS = [
+  ['🐱', '#ffd6e0'], ['🐼', '#e3e8ef'], ['🦉', '#f5e1c8'], ['🐰', '#fde2ff'],
+  ['🦊', '#ffe0c2'], ['🦄', '#efe0ff'], ['🐯', '#fff0b8'], ['🐨', '#dfe9f2'],
+  ['🐸', '#d6f5d0'], ['🐧', '#d7ecff'], ['🦁', '#ffe7a8'], ['🐻', '#f0dcc8'],
+  ['🐬', '#cdeeff'], ['🦋', '#e0f0ff'], ['🐝', '#fff3b0'], ['🐢', '#d9f7e3'],
+];
+const SHAPES = ['▲', '◆', '●', '■'];
+const MAXTOTAL = QUESTIONS.reduce((s, q) => s + (q.golden ? 2000 : 1000), 0);
+const PARAMS = new URLSearchParams(window.GAS_PARAMS ? Object.entries(window.GAS_PARAMS) : location.search);
+const NET_LOCAL = PARAMS.get('net') === 'local';
+const app = document.getElementById('app');
+
+/* ---------------- أدوات ---------------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ar = n => Number(n).toLocaleString('ar-EG');
+const rid = (n = 8) => Array.from(crypto.getRandomValues(new Uint8Array(n)), b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join('');
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { } },
+};
+function avHTML(i, size) {
+  const a = AVATARS[i] || AVATARS[0];
+  return `<span class="av" style="width:${size};height:${size};font-size:calc(${size} * .62);background:${a[1]}">${a[0]}</span>`;
+}
+function ayahHTML(ayah, ref) {
+  if (!ayah) return '';
+  const body = esc(ayah).replace(/\[\[(.+?)\]\]/g, '<mark>$1</mark>');
+  return `<div class="q-ayah quran">﴿${body}﴾ ${ref ? `<span class="ref">(${ref})</span>` : ''}</div>`;
+}
+function modal(html, buttons) {
+  return new Promise(res => {
+    const bg = document.createElement('div');
+    bg.className = 'modal-bg';
+    bg.innerHTML = `<div class="modal"><div>${html}</div><div class="row">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-i="${i}">${b.label}</button>`).join('')}</div></div>`;
+    bg.addEventListener('click', e => { const i = e.target.dataset.i; if (i !== undefined) { bg.remove(); res(buttons[+i].value); } });
+    document.body.appendChild(bg);
+  });
+}
+
+/* ---------------- الأصوات (مولَّدة بالمتصفح) ---------------- */
+const SND = {
+  ctx: null, master: null, on: true, music: null,
+  init() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = .7; this.master.connect(this.ctx.destination);
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  tone(f, d, o = {}) {
+    if (!this.ctx || !this.on) return;
+    const t = this.ctx.currentTime + (o.t || 0), g = this.ctx.createGain(), os = this.ctx.createOscillator();
+    os.type = o.type || 'sine'; os.frequency.setValueAtTime(f, t);
+    if (o.to) os.frequency.exponentialRampToValueAtTime(o.to, t + d);
+    const v = o.g == null ? .25 : o.g;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + (o.a || .01));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    os.connect(g); g.connect(this.master); os.start(t); os.stop(t + d + .05);
+  },
+  noise(d, o = {}) {
+    if (!this.ctx || !this.on) return;
+    const t = this.ctx.currentTime + (o.t || 0), len = Math.ceil(this.ctx.sampleRate * d);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = o.type || 'bandpass'; f.frequency.setValueAtTime(o.f || 1500, t); f.Q.value = o.q || 1;
+    if (o.to) f.frequency.exponentialRampToValueAtTime(o.to, t + d);
+    const g = this.ctx.createGain(); const v = o.g == null ? .2 : o.g;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    src.connect(f); f.connect(g); g.connect(this.master); src.start(t); src.stop(t + d + .05);
+  },
+  pop() { this.tone(500, .12, { to: 1100, type: 'triangle', g: .3 }); },
+  click() { this.tone(900, .06, { type: 'square', g: .08 }); },
+  tick(hurry) { this.tone(hurry ? 1500 : 1100, .05, { type: 'square', g: hurry ? .12 : .05 }); },
+  correct() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, .25, { t: i * .09, type: 'triangle', g: .28 })); },
+  wrong() { this.tone(220, .45, { to: 110, type: 'sawtooth', g: .14 }); this.tone(233, .45, { to: 116, type: 'square', g: .06 }); },
+  reveal() { this.noise(.5, { f: 800, to: 4000, g: .15 }); [784, 988, 1175].forEach((f, i) => this.tone(f, .3, { t: .25 + i * .08, type: 'triangle', g: .2 })); },
+  whoosh() { this.noise(.9, { f: 300, to: 3000, g: .22, q: .7 }); },
+  drumroll(dur = 1.6) {
+    if (!this.ctx) return; let t = 0, gap = .09;
+    while (t < dur) { this.noise(.07, { t, f: 2500, type: 'highpass', g: .08 + .12 * (t / dur) }); this.tone(90, .07, { t, g: .1 }); t += gap; gap = Math.max(.035, gap * .96); }
+    this.tone(70, .5, { t: dur, g: .4 }); this.noise(.6, { t: dur, f: 5000, type: 'highpass', g: .25 });
+  },
+  fanfare() {
+    const n = [[523, 0, .18], [523, .2, .1], [523, .32, .1], [659, .45, .3], [587, .8, .18], [659, 1, .18], [784, 1.2, .8]];
+    n.forEach(([f, t, d]) => { this.tone(f, d + .05, { t, type: 'sawtooth', g: .12 }); this.tone(f * 2, d + .05, { t, type: 'triangle', g: .1 }); });
+    [262, 330, 392].forEach(f => this.tone(f, 1, { t: 1.2, type: 'triangle', g: .12 }));
+  },
+  stopMusic() { if (this.music) { clearInterval(this.music); this.music = null; } },
+  playMusic(kind) {
+    this.stopMusic(); if (!this.ctx) return;
+    let step = 0;
+    const lobbyMel = [523, 659, 784, 880, 784, 659, 587, 659, 523, 659, 784, 1047, 880, 784, 659, 587];
+    const lobbyBass = [131, 110, 87, 98];
+    const run = () => {
+      if (!this.on) { step++; return; }
+      if (kind === 'lobby') {
+        if (step % 2 === 0) this.tone(lobbyMel[(step / 2) % 16], .2, { type: 'triangle', g: .07 });
+        if (step % 8 === 0) this.tone(lobbyBass[(step / 8) % 4], .5, { type: 'sine', g: .16 });
+        if (step % 4 === 2) this.noise(.05, { f: 7000, type: 'highpass', g: .04 });
+      } else if (kind === 'question') {
+        if (step % 4 === 0) this.tone(110, .2, { type: 'sine', g: .2 });
+        if (step % 4 === 2) this.tone(110, .12, { type: 'sine', g: .1 });
+        if (step % 2 === 1) this.noise(.04, { f: 8000, type: 'highpass', g: .035 });
+        if (step % 16 === 8) this.tone(220, .15, { type: 'triangle', g: .05 });
+      }
+      step++;
+    };
+    run(); this.music = setInterval(run, kind === 'lobby' ? 115 : 125);
+  },
+};
+document.addEventListener('pointerdown', () => SND.init(), { capture: true });
+
+/* ---------------- قصاصات الاحتفال ---------------- */
+function confetti(ms = 5000) {
+  const cv = document.getElementById('confetti'), cx = cv.getContext('2d');
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ['#ffc83d', '#e21b3c', '#1368ce', '#26890c', '#ff6fb5', '#ffffff', '#9b5cff'];
+  const P = Array.from({ length: 220 }, () => ({ x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .6, w: 6 + Math.random() * 8, h: 8 + Math.random() * 10, vx: -2 + Math.random() * 4, vy: 2 + Math.random() * 4, r: Math.random() * 6, vr: -.2 + Math.random() * .4, c: cols[Math.floor(Math.random() * cols.length)] }));
+  const end = performance.now() + ms;
+  (function f(now) {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    P.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += p.vr; p.vy += .03; if (p.y > cv.height + 20 && now < end) { p.y = -20; p.vy = 2 + Math.random() * 3; } cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.c; cx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); cx.restore(); });
+    if (now < end + 3000) requestAnimationFrame(f); else cx.clearRect(0, 0, cv.width, cv.height);
+  })(performance.now());
+}
+
+/* ---------------- خلفية: سحب وجبال ---------------- */
+function bgHTML(withMtn = true) {
+  const clouds = [[8, 60, 34, 0], [20, 90, 48, -18], [32, 70, 40, -9], [14, 50, 55, -27]]
+    .map(([top, w, dur, delay]) => `<div class="cloud" style="top:${top}%;width:${w * 1.6}px;height:${w * .55}px;animation-duration:${dur}s;animation-delay:${delay}s"></div>`).join('');
+  const mtn = withMtn ? `<svg class="bg-mtn" viewBox="0 0 1000 300" preserveAspectRatio="none"><polygon points="0,300 120,120 230,210 380,40 520,190 640,90 800,200 900,110 1000,180 1000,300" fill="#7fb8e6"/><polygon points="0,300 180,170 320,250 470,130 620,260 760,160 1000,280 1000,300" fill="#5d9fd6"/></svg>` : '';
+  return clouds + mtn;
+}
+
+/* ---------------- طبقة الشبكة ---------------- */
+function makeHostNet(id, h) {
+  if (NET_LOCAL) {
+    const bc = new BroadcastChannel('saffat-' + id); const known = new Set();
+    bc.onmessage = e => {
+      const m = e.data; if (m.to !== 'host') return;
+      if (m.type === 'bye') { known.delete(m.from); h.onClose(m.from); return; }
+      known.add(m.from); h.onData(m.from, m.data);
+    };
+    setTimeout(() => h.onReady(id), 30);
+    return { send(cid, d) { bc.postMessage({ to: cid, from: 'host', data: d }); }, destroy() { bc.close(); } };
+  }
+  let peer, conns = {}, tries = 0, dead = false;
+  function start() {
+    peer = new Peer(id, { debug: 1 });
+    peer.on('open', () => { tries = 0; h.onReady(id); });
+    peer.on('connection', conn => {
+      conn.on('open', () => { conns[conn.peer] = conn; });
+      conn.on('data', d => { conns[conn.peer] = conn; h.onData(conn.peer, d); });
+      conn.on('close', () => { if (conns[conn.peer] === conn) { delete conns[conn.peer]; h.onClose(conn.peer); } });
+      conn.on('error', () => { });
+    });
+    peer.on('disconnected', () => { if (!dead && !peer.destroyed) setTimeout(() => { try { peer.reconnect(); } catch (e) { } }, 1500); });
+    peer.on('error', err => {
+      if (err.type === 'unavailable-id') {
+        try { peer.destroy(); } catch (e) { }
+        if (++tries <= 15) { h.onError('wait'); setTimeout(() => { if (!dead) start(); }, 3000); } else h.onError('taken');
+      } else if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible'].includes(err.type)) h.onError('network');
+    });
+  }
+  start();
+  return {
+    send(cid, d) { const c = conns[cid]; if (c && c.open) { try { c.send(d); } catch (e) { } } },
+    destroy() { dead = true; try { peer.destroy(); } catch (e) { } },
+  };
+}
+function makeClientNet(hostId, h) {
+  if (NET_LOCAL) {
+    const me = 'c' + rid(7); const bc = new BroadcastChannel('saffat-' + hostId);
+    bc.onmessage = e => { const m = e.data; if (m.to === me) h.onData(m.data); };
+    addEventListener('pagehide', () => bc.postMessage({ to: 'host', from: me, type: 'bye' }));
+    setTimeout(() => h.onOpen(), 30);
+    return { send(d) { bc.postMessage({ to: 'host', from: me, data: d }); }, reconnect() { setTimeout(() => h.onOpen(), 30); } };
+  }
+  let peer = null, conn = null, opened = false, failT = null;
+  function connect() {
+    opened = false; clearTimeout(failT);
+    if (peer) { try { peer.destroy(); } catch (e) { } }
+    peer = new Peer({ debug: 1 });
+    failT = setTimeout(() => { if (!opened) h.onError('timeout'); }, 20000);
+    peer.on('open', () => {
+      conn = peer.connect(hostId, { reliable: true });
+      conn.on('open', () => { opened = true; clearTimeout(failT); h.onOpen(); });
+      conn.on('data', d => h.onData(d));
+      conn.on('close', () => { if (opened) { opened = false; h.onClose(); } });
+      conn.on('error', () => { });
+    });
+    peer.on('error', err => { if (err.type === 'peer-unavailable') { clearTimeout(failT); h.onError('nohost'); } });
+  }
+  connect();
+  return { send(d) { if (conn && conn.open) { try { conn.send(d); } catch (e) { } } }, reconnect: connect };
+}
+
+/* =====================================================================
+   لوحة المعلمة
+   ===================================================================== */
+const H = { S: null, net: null, cidPid: {}, pidCid: {}, raf: 0, qTimer: null, lastTick: -1, ready: false, boardTimers: [] };
+
+function hostIdFor(key) {
+  let id = store.get('saffat_hostid_' + key);
+  if (!id) { id = 'saffat-qimma-' + rid(8) + '-' + key; store.set('saffat_hostid_' + key, id); }
+  return id;
+}
+function saveState() { if (H.S) store.set('iqra-qimma-state-' + H.S.cls, Object.assign({}, H.S, { saved: Date.now() })); }
+function studentURL() {
+  const base = window.GAS_BASE || location.href.split('?')[0].split('#')[0];
+  return base + '?join=' + encodeURIComponent(H.S.hostId) + '&c=' + H.S.cls + (NET_LOCAL ? '&net=local' : '');
+}
+function ranked() {
+  return Object.entries(H.S.players).map(([pid, p]) => Object.assign({ pid }, p))
+    .sort((a, b) => b.score - a.score || a.joined - b.joined);
+}
+function recomputeRanks() { ranked().forEach((p, i) => { H.S.players[p.pid].rank = i + 1; }); }
+function onlineCount() { return Object.values(H.S.players).filter(p => p.online).length; }
+
+function renderSetup() {
+  SND.stopMusic();
+  if (!QIMMA || !QUESTIONS.length) {
+    app.innerHTML = `<div class="screen setup">${bgHTML()}<div style="font-size:clamp(50px,7vw,110px);z-index:1">⛰️</div><div class="title-big" style="z-index:1">تحدّي القمّة</div>
+      <div class="subtitle" style="z-index:1">افتحي اللعبة من موقع «اقرأ وارتقِ»: شاشة الصف ← استراتيجيات الحصة ← تحدّي القمّة.</div>
+      <button class="btn green" id="b-exit" style="z-index:1">العودة إلى اقرأ وارتقِ</button></div>`;
+    $('#b-exit').onclick = exitToSite; return;
+  }
+  const T = QIMMA.T || store.get('saffat_T') || 20;
+  app.innerHTML = `<div class="screen setup">${bgHTML()}
+    <div style="font-size:clamp(50px,7vw,110px);z-index:1">⛰️</div>
+    <div class="title-big" style="z-index:1">تحدّي القمّة</div>
+    <div class="subtitle" style="z-index:1">${esc(QIMMA.label || '')} — ${ar(QUESTIONS.length)} سؤالًا</div>
+    <div class="class-grid" style="z-index:1">${CLASSES.map(c => `<button class="class-btn" data-k="${c.key}">ابدئي: ${esc(c.name)}</button>`).join('')}</div>
+    <div class="settings" style="z-index:1">⏱️ مدة كل سؤال:
+      <select id="tsel">${[15, 20, 25, 30].map(s => `<option value="${s}" ${s === T ? 'selected' : ''}>${ar(s)} ثانية</option>`).join('')}</select>
+    </div>
+    <button class="btn ghost" id="b-exit" style="z-index:1;font-size:clamp(14px,1.4vw,22px)">العودة إلى اقرأ وارتقِ</button>
+  </div>`;
+  $('#b-exit').onclick = exitToSite;
+  app.querySelectorAll('.class-btn').forEach(b => b.onclick = () => {
+    SND.init(); SND.click();
+    const T = +$('#tsel').value; store.set('saffat_T', T);
+    chooseClass(CLASSES.find(c => c.key === b.dataset.k), T);
+  });
+}
+
+async function chooseClass(cls, T) {
+  const old = store.get('iqra-qimma-state-' + cls.key);
+  let resume = false;
+  // resume only the same set of questions (the same game launched from the review screen)
+  if (old && old.qset === QIMMA.id && old.phase !== 'lobby' && old.phase !== 'final' && Date.now() - old.saved < 3 * 3600e3) {
+    resume = await modal(`توجد لعبة غير مكتملة لشعبة <b>${cls.name}</b> (وصلت إلى السؤال ${ar(old.qi + 1)}).<br>هل تريدين استئنافها؟`,
+      [{ label: 'استئناف اللعبة', value: true, cls: 'green' }, { label: 'لعبة جديدة', value: false, cls: 'ghost' }]);
+  }
+  const hostId = hostIdFor(cls.key);
+  if (resume) {
+    H.S = old; H.S.T = T; H.S.hostId = hostId;
+    Object.values(H.S.players).forEach(p => p.online = false);
+    if (H.S.phase === 'question') { H.S.phase = 'board'; H.S.qi = H.S.qi - 1; H.S.resumeRedo = true; }
+  } else {
+    H.S = {
+      cls: cls.key, clsName: cls.name, hostId, gameId: rid(6), qset: QIMMA.id, phase: 'lobby', qi: -1, stage: 0, T,
+      players: {}, joins: 0, perms: QUESTIONS.map(q => q.noShuffle ? [0, 1, 2, 3] : shuffle([0, 1, 2, 3])),
+      qStart: 0, ans: {},
+    };
+  }
+  H.cidPid = {}; H.pidCid = {};
+  if (H.net) H.net.destroy();
+  H.ready = false;
+  H.net = makeHostNet(hostId, {
+    onReady() { H.ready = true; const s = $('#netstat'); if (s) s.remove(); },
+    onError(kind) {
+      const msg = kind === 'wait' ? 'جارٍ تجهيز الاتصال…' : kind === 'taken' ? 'هذه الشعبة مفتوحة على لوحٍ آخر. أغلقيها هناك ثم أعيدي المحاولة.' : 'انقطع الاتصال بالإنترنت… جارٍ إعادة المحاولة';
+      let s = $('#netstat'); if (!s) { s = document.createElement('div'); s.id = 'netstat'; s.className = 'warn'; s.style.cssText = 'position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:70'; document.body.appendChild(s); }
+      s.textContent = '⚠️ ' + msg;
+    },
+    onData: hostOnData,
+    onClose(cid) {
+      const pid = H.cidPid[cid]; delete H.cidPid[cid];
+      if (pid && H.pidCid[pid] === cid) { delete H.pidCid[pid]; if (H.S.players[pid]) H.S.players[pid].online = false; refreshLive(); }
+    },
+  });
+  saveState();
+  renderHost();
+}
+
+function sendView(pid) { const cid = H.pidCid[pid]; if (cid) H.net.send(cid, viewFor(pid)); }
+function broadcastViews() { Object.keys(H.pidCid).forEach(sendView); }
+
+function hostOnData(cid, d) {
+  if (!d || typeof d !== 'object' || !H.S) return;
+  const S = H.S;
+  if (d.t === 'hello') {
+    const p = S.players[d.pid];
+    if (p) { bind(cid, d.pid); p.online = true; sendView(d.pid); refreshLive(); }
+    else H.net.send(cid, needJoin());
+  } else if (d.t === 'join') {
+    if (S.phase === 'final') { H.net.send(cid, { t: 'needjoin', cls: S.clsName, phase: 'final' }); return; }
+    const name = String(d.name || '').trim().slice(0, 40) || 'متسلّقة';
+    // a name from the class list is reserved for one student only
+    if (NAMES.length && Object.entries(S.players).some(([k, x]) => k !== d.pid && x.name === name)) { H.net.send(cid, Object.assign(needJoin(d.pid), { taken: name })); return; }
+    const av = Math.max(0, Math.min(AVATARS.length - 1, d.av | 0));
+    let p = S.players[d.pid];
+    if (!p) {
+      p = S.players[d.pid] = { name, av, score: 0, prev: 0, streak: 0, rank: 0, prevRank: 0, lane: ((S.joins * 0.618034) + .11) % 1, joined: S.joins++, last: null, online: true };
+      recomputeRanks(); SND.pop();
+    } else { p.name = name; p.av = av; p.online = true; }
+    bind(cid, d.pid); sendView(d.pid); saveState(); refreshLive();
+  } else if (d.t === 'answer') {
+    const pid = H.cidPid[cid];
+    if (!pid || S.phase !== 'question' || d.qi !== S.qi || S.ans[pid]) return;
+    const c = d.c | 0; if (c < 0 || c > 3) return;
+    S.ans[pid] = { c, ms: Date.now() - S.qStart };
+    sendView(pid); refreshLive();
+    const online = Object.keys(S.players).filter(k => S.players[k].online);
+    if (online.length && online.every(k => S.ans[k])) setTimeout(finishQuestion, 700);
+  }
+}
+// the join screen gets the class names (the board has them; the tablets need no password) and the names already chosen
+function needJoin(pid) {
+  const S = H.S;
+  return { t: 'needjoin', cls: S.clsName, phase: S.phase, names: NAMES, used: Object.entries(S.players).filter(([k]) => k !== pid).map(([, x]) => x.name) };
+}
+function bind(cid, pid) {
+  const old = H.pidCid[pid]; if (old && old !== cid) delete H.cidPid[old];
+  H.cidPid[cid] = pid; H.pidCid[pid] = cid;
+}
+
+function viewFor(pid) {
+  const S = H.S, p = S.players[pid];
+  const v = { t: 'view', phase: S.phase, cls: S.clsName, n: Object.keys(S.players).length, me: { name: p.name, av: p.av, score: p.score, rank: p.rank } };
+  if (S.phase === 'stage') { v.stage = S.stage; v.st = { title: STAGES[S.stage].title, sub: STAGES[S.stage].sub }; }
+  if (S.phase === 'question') {
+    const q = QUESTIONS[S.qi];
+    v.q = { i: S.qi, total: QUESTIONS.length, text: q.q, type: q.type, ayah: q.ayah, ref: q.ref, golden: !!q.golden, opts: S.perms[S.qi].map(k => q.opts[k]), remain: Math.max(0, S.qStart + S.T * 1000 - Date.now()), T: S.T };
+    v.answered = !!S.ans[pid];
+  }
+  if (S.phase === 'reveal' || S.phase === 'board') {
+    v.phase = 'result'; v.qi = S.qi;
+    v.res = p.last && p.last.qi === S.qi ? p.last : { joinedLate: true };
+    v.streak = p.streak; v.correct = S.qi >= 0 ? QUESTIONS[S.qi].opts[QUESTIONS[S.qi].a] : '';
+  }
+  if (S.phase === 'final') v.top = ranked().slice(0, 3).map(x => ({ name: x.name, av: x.av, score: x.score }));
+  return v;
+}
+
+/* ----- تقدّم المراحل ----- */
+function hostStartGame() { H.S.phase = 'stage'; H.S.stage = 0; SND.whoosh(); afterPhase(); }
+function startQuestion(i) {
+  const S = H.S; S.qi = i; S.phase = 'question'; S.ans = {}; S.qStart = Date.now(); S.resumeRedo = false;
+  clearTimeout(H.qTimer); H.qTimer = setTimeout(finishQuestion, S.T * 1000 + 250);
+  afterPhase();
+}
+function finishQuestion() {
+  const S = H.S; if (!S || S.phase !== 'question') return;
+  clearTimeout(H.qTimer);
+  const q = QUESTIONS[S.qi], correctD = S.perms[S.qi].indexOf(q.a), T = S.T * 1000;
+  Object.entries(S.players).forEach(([pid, p]) => {
+    p.prevRank = p.rank || Object.keys(S.players).length; p.prev = p.score;
+    const a = S.ans[pid];
+    const ok = !!a && a.c === correctD;
+    let pts = 0, bonus = 0;
+    if (ok) {
+      pts = Math.round(1000 * (1 - Math.min(a.ms, T) / T / 2)) * (q.golden ? 2 : 1);
+      p.streak++; if (p.streak >= 3) bonus = 100 * Math.min(p.streak - 2, 3);
+    } else p.streak = 0;
+    p.score += pts + bonus;
+    p.last = { qi: S.qi, ok, answered: !!a, pts: pts + bonus, bonus };
+  });
+  recomputeRanks();
+  S.phase = 'reveal'; afterPhase();
+}
+function goBoard() { H.S.phase = 'board'; afterPhase(); }
+function hostNext() {
+  const S = H.S, nx = S.qi + 1;
+  if (S.resumeRedo) { startQuestion(nx); return; }
+  if (nx >= QUESTIONS.length) { S.phase = 'final'; afterPhase(); return; }
+  if (S.qi < 0 || QUESTIONS[nx].stage !== QUESTIONS[S.qi].stage) { S.phase = 'stage'; S.stage = QUESTIONS[nx].stage; SND.whoosh(); afterPhase(); return; }
+  startQuestion(nx);
+}
+function afterPhase() { saveState(); renderHost(); broadcastViews(); }
+
+/* ----- رسم شاشات اللوح ----- */
+function topbar(extra = '') {
+  return `<div class="topbar"><span class="logo">⛰️ تحدّي القمّة</span><span class="pill">${esc(H.S.clsName)}</span>${extra}<span class="spacer"></span></div>`;
+}
+function hostButtons() {
+  return `<button class="icon-btn" style="left:12px" id="b-snd" title="الصوت">${SND.on ? '🔊' : '🔇'}</button>
+  <button class="icon-btn" style="left:66px" id="b-fs" title="ملء الشاشة">⛶</button>
+  <button class="icon-btn" style="left:120px" id="b-home" title="الرئيسية">🏠</button>`;
+}
+function wireHostButtons() {
+  $('#b-snd').onclick = () => { SND.on = !SND.on; $('#b-snd').textContent = SND.on ? '🔊' : '🔇'; };
+  $('#b-fs').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); };
+  $('#b-home').onclick = async () => {
+    const ok = await modal('هل تريدين العودة إلى الصفحة الرئيسية؟<br><small>يمكنكِ استئناف اللعبة لاحقًا من الشعبة نفسها.</small>', [{ label: 'نعم', value: true }, { label: 'إلغاء', value: false, cls: 'ghost' }]);
+    if (ok) { cancelAnimationFrame(H.raf); clearTimeout(H.qTimer); if (H.net) H.net.destroy(); H.net = null; H.S = null; renderSetup(); }
+  };
+}
+
+function renderHost() {
+  cancelAnimationFrame(H.raf); H.boardTimers.forEach(clearTimeout); H.boardTimers = [];
+  const S = H.S;
+  ({ lobby: renderLobby, stage: renderStage, question: renderQuestion, reveal: renderQuestion, board: renderBoard, final: renderFinal })[S.phase]();
+  wireHostButtons();
+}
+function refreshLive() {
+  if (!H.S) return;
+  if (H.S.phase === 'lobby') updateLobby();
+  if (H.S.phase === 'question') updateAnswered();
+}
+
+function renderLobby() {
+  SND.playMusic('lobby');
+  const url = studentURL();
+  let qrSvg = '';
+  try { const qr = qrcode(0, 'M'); qr.addData(url); qr.make(); qrSvg = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true }); } catch (e) { qrSvg = '<p>تعذّر إنشاء الرمز</p>'; }
+  app.innerHTML = `<div class="screen">${bgHTML()}${topbar()}${hostButtons()}
+    <div class="lobby" style="z-index:1">
+      <div class="qr-card">
+        <div class="cls">${esc(H.S.clsName)}</div>
+        <div class="qr">${qrSvg}</div>
+        <div class="hint">📱 امسحي الرمز بالكاميرا للانضمام</div>
+        <div class="url">${esc(url)}</div>
+      </div>
+      <div class="lobby-side">
+        <div class="count-box">🧗‍♀️ في المعسكر: <span class="num" id="pcount">٠</span><span class="spacer"></span>
+          <button class="btn green" id="b-start">ابدئي التحدّي ◀</button></div>
+        <div class="players" id="plist"></div>
+        <div style="color:#fff;font-weight:700;font-size:clamp(12px,1.1vw,18px);text-shadow:0 1px 3px rgba(0,0,0,.3)">💡 للتجربة: <a href="${esc(url)}" target="_blank" style="color:#fff">افتحي نافذة طالبة</a> — للإزالة: اضغطي على اسم الطالبة</div>
+      </div>
+    </div></div>`;
+  $('#b-start').onclick = () => { SND.stopMusic(); hostStartGame(); };
+  updateLobby();
+}
+function updateLobby() {
+  const list = $('#plist'); if (!list) return;
+  const ps = Object.entries(H.S.players).sort((a, b) => a[1].joined - b[1].joined);
+  $('#pcount').textContent = ar(ps.length);
+  $('#b-start').disabled = ps.length === 0;
+  const have = new Set([...list.querySelectorAll('.chip')].map(c => c.dataset.pid));
+  if (!ps.length) { list.innerHTML = '<div class="empty-msg">بانتظار انضمام المتسلّقات… ⛺</div>'; return; }
+  const em = list.querySelector('.empty-msg'); if (em) em.remove();
+  [...list.querySelectorAll('.chip')].forEach(c => { if (!H.S.players[c.dataset.pid]) c.remove(); });
+  ps.forEach(([pid, p]) => {
+    let chip = list.querySelector(`.chip[data-pid="${pid}"]`);
+    if (!have.has(pid)) {
+      chip = document.createElement('div'); chip.className = 'chip'; chip.dataset.pid = pid; list.appendChild(chip);
+      chip.onclick = async () => {
+        const ok = await modal(`هل تريدين إزالة «${esc(p.name)}» من اللعبة؟`, [{ label: 'إزالة', value: true }, { label: 'إلغاء', value: false, cls: 'ghost' }]);
+        if (ok && H.S.players[pid]) { const cid = H.pidCid[pid]; if (cid) H.net.send(cid, { t: 'kicked' }); delete H.pidCid[pid]; if (cid) delete H.cidPid[cid]; delete H.S.players[pid]; saveState(); updateLobby(); }
+      };
+    }
+    chip.innerHTML = `${avHTML(p.av, 'clamp(30px,2.6vw,44px)')}<span>${esc(p.name)}</span><span class="x">✕</span>`;
+    chip.classList.toggle('off', !p.online);
+  });
+}
+
+function renderStage() {
+  const st = STAGES[H.S.stage];
+  app.innerHTML = `<div class="screen">${bgHTML()}${topbar()}${hostButtons()}
+    <div class="stage-card" style="z-index:1">
+      <div class="flag">${['🏕️', '🧗‍♀️', '🚩'][H.S.stage]}</div>
+      <h1>${st.title}</h1><h2>${st.sub} — الصفحة ${st.page}</h2>
+      <p>${st.story}</p>
+      <button class="btn green" id="b-go">انطلقن! ◀</button>
+    </div></div>`;
+  $('#b-go').onclick = () => startQuestion(H.S.qi + 1);
+}
+
+function renderQuestion() {
+  const S = H.S, q = QUESTIONS[S.qi], perm = S.perms[S.qi], reveal = S.phase === 'reveal';
+  const correctD = perm.indexOf(q.a);
+  const counts = [0, 0, 0, 0]; Object.values(S.ans).forEach(a => counts[a.c]++);
+  const extra = `<span class="pill">السؤال ${ar(S.qi + 1)} من ${ar(QUESTIONS.length)}</span>${q.golden ? '<span class="golden-banner">⭐ سؤال ذهبي: النقاط مضاعفة!</span>' : ''}`;
+  app.innerHTML = `<div class="screen">${topbar(extra)}${hostButtons()}
+    <div class="q-wrap">
+      <div class="q-head">
+        <div class="q-box"><span class="q-type">${esc(q.type)}</span><div class="q-text">${esc(q.q)}</div>${ayahHTML(q.ayah, q.ref)}</div>
+        ${reveal ? '' : `<div style="display:flex;flex-direction:column;justify-content:center;gap:10px">
+          <div class="timer" id="timer"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="rgba(0,0,0,.18)" stroke="rgba(255,255,255,.35)" stroke-width="9"/><circle id="tarc" cx="50" cy="50" r="44" fill="none" stroke="#ffd75e" stroke-width="9" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><div class="t" id="tnum"></div></div>
+          <div class="answered">أجابت<b id="acount">٠</b>من <span id="atotal"></span></div></div>`}
+      </div>
+      <div class="opts">${perm.map((k, i) => `<div class="opt c${i} ${reveal ? (i === correctD ? 'right' : 'dim') : ''}"><span class="shape">${SHAPES[i]}</span><span>${esc(q.opts[k])}</span>${reveal ? `<span class="cnt">${ar(counts[i])} 👤</span>` : ''}${reveal && i === correctD ? '<span class="tick">✔</span>' : ''}</div>`).join('')}</div>
+      ${reveal ? `<div class="bottom-row"><div class="exp" style="flex:1"><b>✔ الإجابة الصحيحة: ${esc(q.opts[q.a])}</b><br>${esc(q.exp)}</div><button class="btn green" id="b-board">عرض الجبل ⛰️</button></div>`
+      : `<div class="bottom-row"><button class="btn ghost" id="b-skip" style="font-size:clamp(14px,1.4vw,22px)">إنهاء الوقت ⏭</button></div>`}
+    </div></div>`;
+  if (reveal) {
+    SND.stopMusic(); SND.reveal();
+    $('#b-board').onclick = goBoard;
+  } else {
+    SND.playMusic('question');
+    $('#b-skip').onclick = finishQuestion;
+    updateAnswered(); H.lastTick = -1; timerLoop();
+  }
+}
+function updateAnswered() {
+  const a = $('#acount'); if (!a) return;
+  a.textContent = ar(Object.keys(H.S.ans).length);
+  $('#atotal').textContent = ar(Math.max(onlineCount(), Object.keys(H.S.ans).length));
+}
+function timerLoop() {
+  const S = H.S; if (!S || S.phase !== 'question') return;
+  const rem = Math.max(0, S.qStart + S.T * 1000 - Date.now()), sec = Math.ceil(rem / 1000);
+  const arc = $('#tarc'), num = $('#tnum'), tm = $('#timer');
+  if (arc) { arc.setAttribute('stroke-dashoffset', String(276.5 * (1 - rem / (S.T * 1000)))); arc.setAttribute('stroke', sec <= 5 ? '#ff5a5a' : '#ffd75e'); }
+  if (num) num.textContent = ar(sec);
+  if (tm) tm.classList.toggle('hurry', sec <= 5);
+  if (sec !== H.lastTick) { if (H.lastTick !== -1 && sec > 0) SND.tick(sec <= 5); H.lastTick = sec; }
+  if (rem <= 0) { finishQuestion(); return; }
+  H.raf = requestAnimationFrame(timerLoop);
+}
+
+/* ----- شاشة الجبل ----- */
+function mtnSVG() {
+  return `<svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMax meet">
+    <defs>
+      <linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a9bb8"/><stop offset=".55" stop-color="#6f8f6a"/><stop offset="1" stop-color="#4f8a3d"/></linearGradient>
+      <linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b7a96"/><stop offset="1" stop-color="#3d6f2f"/></linearGradient>
+      <radialGradient id="glow"><stop offset="0" stop-color="#fff6b0" stop-opacity=".9"/><stop offset="1" stop-color="#fff6b0" stop-opacity="0"/></radialGradient>
+    </defs>
+    <polygon points="0,600 150,330 260,420 330,370 420,600" fill="#9cc6e8" opacity=".8"/>
+    <polygon points="600,600 700,350 790,420 870,300 1000,460 1000,600" fill="#9cc6e8" opacity=".8"/>
+    <circle cx="500" cy="55" r="80" fill="url(#glow)"/>
+    <polygon points="60,600 500,60 940,600" fill="url(#gm)"/>
+    <polygon points="500,60 940,600 600,600 560,380 600,250" fill="url(#gs)" opacity=".55"/>
+    <polygon points="500,60 418,160 445,150 462,178 488,152 515,182 540,150 565,170 582,160" fill="#fff"/>
+    <polyline points="300,600 360,520 560,470 420,400 590,330 470,260 560,200 500,130" fill="none" stroke="#e8d7b0" stroke-width="5" stroke-dasharray="10 8" opacity=".75"/>
+    <g opacity=".9"><line x1="238" y1="420" x2="238" y2="392" stroke="#5a3b1c" stroke-width="3"/><polygon points="238,392 262,399 238,406" fill="#e21b3c"/><text x="238" y="440" text-anchor="middle" font-family="Cairo" font-weight="700" font-size="16" fill="#fff">المعسكر ١</text></g>
+    <g opacity=".9"><line x1="700" y1="300" x2="700" y2="272" stroke="#5a3b1c" stroke-width="3"/><polygon points="700,272 724,279 700,286" fill="#1368ce"/><text x="700" y="320" text-anchor="middle" font-family="Cairo" font-weight="700" font-size="16" fill="#fff">المعسكر ٢</text></g>
+    <line x1="500" y1="62" x2="500" y2="6" stroke="#5a3b1c" stroke-width="4"/>
+    <polygon points="500,6 548,18 500,32" fill="#ffc83d" stroke="#e39a00" stroke-width="2"><animate attributeName="points" dur="1.2s" repeatCount="indefinite" values="500,6 548,18 500,32;500,6 544,22 500,32;500,6 548,18 500,32"/></polygon>
+  </svg>`;
+}
+function climberPos(score, lane) {
+  const h = Math.min(1, score / (MAXTOTAL * 0.8));
+  const y = 588 - h * 512;
+  const half = 440 * (y - 60) / 540;
+  const x = 500 + (lane - .5) * 2 * half * .82;
+  return { left: x / 10 + '%', top: y / 6 + '%' };
+}
+function renderBoard() {
+  SND.stopMusic();
+  const S = H.S, list = ranked(), n = list.length;
+  const size = n <= 12 ? 'clamp(34px,3.6vw,62px)' : n <= 24 ? 'clamp(28px,2.8vw,48px)' : 'clamp(24px,2.2vw,38px)';
+  const last = S.qi >= QUESTIONS.length - 1 && !S.resumeRedo;
+  const climbers = list.slice().reverse().map((p) => {
+    const pos = climberPos(p.prev, p.lane);
+    return `<div class="climber ${p.rank === 1 ? 'top1' : ''}" data-pid="${p.pid}" style="left:${pos.left};top:${pos.top};z-index:${100 - p.rank}">
+      ${p.rank === 1 ? '<span class="crown">👑</span>' : ''}${avHTML(p.av, size)}<span class="nm">${esc(p.name)}</span></div>`;
+  }).join('');
+  const lb = list.slice(0, 5).map((p, i) => {
+    const d = (p.prevRank || p.rank) - p.rank;
+    const mv = d > 0 ? `<span class="mv up">▲${ar(d)}</span>` : d < 0 ? `<span class="mv down">▼${ar(-d)}</span>` : '<span class="mv same">—</span>';
+    return `<div class="lb-row" style="animation-delay:${1.9 + i * .12}s"><span class="rk">${['🥇', '🥈', '🥉'][i] || ar(i + 1)}</span>${avHTML(p.av, 'clamp(26px,2.4vw,40px)')}<span class="nm">${esc(p.name)}${p.streak >= 3 ? ' 🔥' : ''}</span><span class="sc">${ar(p.score)}</span>${mv}</div>`;
+  }).join('');
+  const extra = S.qi >= 0 ? `<span class="pill">بعد السؤال ${ar(S.qi + 1)} من ${ar(QUESTIONS.length)}</span>` : '';
+  app.innerHTML = `<div class="screen">${topbar(extra)}${hostButtons()}
+    <div class="board">
+      <div class="mtn-area"><div class="mtn-box" id="mbox">${mtnSVG()}${climbers}</div></div>
+      <div class="lb"><h3>🏆 المتصدّرات</h3>${lb || '<div style="text-align:center">لا توجد طالبات بعد</div>'}
+        <button class="btn green" id="b-next" style="margin-top:1vh">${S.resumeRedo ? 'متابعة السؤال ◀' : last ? 'النتائج النهائية 🏆' : 'السؤال التالي ◀'}</button></div>
+    </div></div>`;
+  $('#b-next').onclick = hostNext;
+  SND.drumroll(1.2);
+  H.boardTimers.push(setTimeout(() => {
+    list.forEach(p => {
+      const el = document.querySelector(`.climber[data-pid="${p.pid}"]`); if (!el) return;
+      const pos = climberPos(p.score, p.lane); el.style.left = pos.left; el.style.top = pos.top;
+      if (p.score > p.prev) el.classList.add('bounce');
+    });
+    SND.whoosh();
+  }, 900));
+}
+
+/* ----- النهاية ----- */
+function renderFinal() {
+  SND.stopMusic();
+  const list = ranked();
+  const pod = (p, cls, rk, delay) => p ? `<div class="pod ${cls}"><div class="who" style="animation-delay:${delay}s">${avHTML(p.av, rk === 1 ? 'clamp(70px,8vw,130px)' : 'clamp(56px,6vw,100px)')}<div class="nm">${rk === 1 ? '👑 ' : ''}${esc(p.name)}</div><div class="sc">${ar(p.score)} نقطة</div></div><div class="block" style="animation-delay:${delay - .5}s">${ar(rk)}</div></div>` : '';
+  app.innerHTML = `<div class="screen final">${bgHTML(false)}${hostButtons()}
+    <div class="title-big" style="font-size:clamp(30px,4.5vw,70px);margin-bottom:auto;padding-top:2vh;z-index:1">🏆 بطلات القمّة — ${esc(H.S.clsName)}</div>
+    <div class="podium" style="z-index:1">${pod(list[1], 'p2', 2, 2.2)}${pod(list[0], 'p1', 1, 3.6)}${pod(list[2], 'p3', 3, 1)}</div>
+    <div class="final-list" style="z-index:1">${list.slice(3).map((p, i) => `<div class="chip">${ar(i + 4)}. ${avHTML(p.av, '26px')}${esc(p.name)} — ${ar(p.score)}</div>`).join('')}</div>
+    <button class="btn ghost" id="b-new" style="margin-top:1vh;z-index:1;font-size:clamp(14px,1.4vw,22px)">لعبة جديدة 🔁</button>
+  </div>`;
+  SND.drumroll(3.4);
+  H.boardTimers.push(setTimeout(() => { SND.fanfare(); confetti(7000); }, 3700));
+  $('#b-new').onclick = async () => {
+    const ok = await modal('بدء لعبة جديدة لهذه الشعبة؟ سيُحذف الترتيب الحالي.', [{ label: 'نعم', value: true }, { label: 'إلغاء', value: false, cls: 'ghost' }]);
+    if (ok) { store.del('iqra-qimma-state-' + H.S.cls); const cls = CLASSES.find(c => c.key === H.S.cls); chooseClass(cls, H.S.T); }
+  };
+}
+
+/* =====================================================================
+   واجهة الطالبة
+   ===================================================================== */
+const ST = { net: null, hostId: '', pid: '', view: null, sel: -1, deadline: 0, raf: 0, answeredQi: -1, cls: '', lastKey: '' };
+
+function studentInit() {
+  ST.hostId = PARAMS.get('join');
+  const c = CLASSES.find(x => x.key === PARAMS.get('c')); ST.cls = c ? c.name : '';
+  ST.pid = store.get('saffat_pid'); if (!ST.pid) { ST.pid = 'p' + rid(10); store.set('saffat_pid', ST.pid); }
+  stMsg('<div class="spinner"></div>', 'جارٍ الاتصال باللوح…');
+  ST.net = makeClientNet(ST.hostId, {
+    onOpen() { ST.net.send({ t: 'hello', pid: ST.pid }); },
+    onData: studentOnData,
+    onClose() { stMsg('<div class="spinner"></div>', 'انقطع الاتصال… جارٍ إعادة الاتصال'); ST.lastKey = ''; setTimeout(() => ST.net.reconnect(), 2000); },
+    onError(kind) {
+      ST.lastKey = '';
+      stMsg('😕', kind === 'nohost' ? 'اللوح غير متصل الآن.<br>تأكدي أن المعلمة فتحت اللعبة، ثم حاولي مرة أخرى.' : 'تعذّر الاتصال.<br>تأكدي من اتصال الجهاز بالإنترنت.',
+        '<button class="btn" id="b-retry">إعادة المحاولة</button>');
+      $('#b-retry').onclick = () => { stMsg('<div class="spinner"></div>', 'جارٍ الاتصال باللوح…'); ST.net.reconnect(); };
+    },
+  });
+}
+function stMsg(icon, text, extra = '') {
+  cancelAnimationFrame(ST.raf);
+  app.innerHTML = `<div class="screen st">${bgHTML()}${ST.cls ? `<div class="cls-pill" style="z-index:1">⛰️ ${esc(ST.cls)}</div>` : ''}
+    <div style="font-size:70px;z-index:1;display:flex;justify-content:center">${icon}</div><p class="info" style="z-index:1">${text}</p><div style="z-index:1">${extra}</div></div>`;
+}
+function studentOnData(d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.t === 'needjoin') {
+    if (d.cls) ST.cls = d.cls; ST.lastKey = '';
+    ST.names = Array.isArray(d.names) ? d.names : []; ST.used = Array.isArray(d.used) ? d.used : []; ST.taken = d.taken || '';
+    if (d.phase === 'final') stMsg('🏁', 'انتهت هذه اللعبة. انتظري اللعبة القادمة!'); else renderJoin();
+  }
+  else if (d.t === 'kicked') { ST.lastKey = ''; stMsg('🙂', 'أزالتكِ المعلمة من اللعبة.<br>يمكنكِ الانضمام مجددًا باسمكِ الصحيح.', '<button class="btn" id="b-again">الانضمام مجددًا</button>'); $('#b-again').onclick = renderJoin; }
+  else if (d.t === 'view') { ST.view = d; ST.cls = d.cls; renderStudent(); }
+}
+function renderJoin() {
+  cancelAnimationFrame(ST.raf);
+  const saved = store.get('saffat_me') || {};
+  ST.sel = -1;
+  // اقرأ وارتقِ: with a class list the student picks her name; otherwise she types it as before
+  const list = ST.names && ST.names.length ? ST.names : null; let picked = '';
+  app.innerHTML = `<div class="screen st">
+    <div class="cls-pill">⛰️ ${esc(ST.cls || 'تحدّي القمّة')}</div>
+    <h2>اختاري شخصيّتكِ</h2>
+    <div class="av-grid">${AVATARS.map((a, i) => `<button class="av-pick" data-i="${i}" style="background:${a[1]}">${a[0]}</button>`).join('')}</div>
+    ${ST.taken ? `<div class="warn">اختارت طالبة أخرى اسم «${esc(ST.taken)}». اختاري اسمكِ أنتِ.</div>` : ''}
+    ${list ? `<h2>اختاري اسمكِ</h2><div class="names-grid">${list.map(n => `<button class="name-pick" data-n="${esc(n)}" ${(ST.used || []).includes(n) ? 'disabled' : ''}>${esc(n)}</button>`).join('')}</div>`
+      : `<h2>اكتبي اسمكِ</h2><input class="name-in" id="nm" maxlength="16" placeholder="الاسم" autocomplete="off" value="">`}
+    <button class="btn green" id="b-join" disabled>انضمّي إلى التحدّي ◀</button></div>`;
+  const nameNow = () => list ? picked : $('#nm').value.trim();
+  const check = () => { $('#b-join').disabled = !(ST.sel >= 0 && nameNow().length >= 2); };
+  app.querySelectorAll('.av-pick').forEach(b => b.onclick = () => {
+    SND.init(); SND.pop(); ST.sel = +b.dataset.i;
+    app.querySelectorAll('.av-pick').forEach(x => x.classList.toggle('sel', x === b)); check();
+  });
+  if (list) app.querySelectorAll('.name-pick').forEach(b => b.onclick = () => {
+    SND.init(); SND.click(); picked = b.dataset.n;
+    app.querySelectorAll('.name-pick').forEach(x => x.classList.toggle('sel', x === b)); check();
+  });
+  else $('#nm').oninput = check;
+  $('#b-join').onclick = () => {
+    const name = nameNow();
+    store.set('saffat_me', { name, av: ST.sel });
+    ST.net.send({ t: 'join', pid: ST.pid, name, av: ST.sel });
+    stMsg('<div class="spinner"></div>', 'جارٍ الانضمام…');
+  };
+  void saved;
+}
+function meBox(me, size = '110px') {
+  return `<div class="me-big">${avHTML(me.av, size)}<div class="nm">${esc(me.name)}</div></div>`;
+}
+function renderStudent() {
+  const v = ST.view;
+  if (v.phase !== 'question') ST.answeredQi = -1;
+  const key = v.phase + '|' + (v.q ? v.q.i : '') + '|' + (v.answered ? 1 : 0) + '|' + (v.qi ?? '') + '|' + (v.stage ?? '');
+  if (key === ST.lastKey) return;
+  ST.lastKey = key;
+  cancelAnimationFrame(ST.raf);
+  if (v.phase === 'lobby') {
+    app.innerHTML = `<div class="screen st">${bgHTML()}<div class="cls-pill" style="z-index:1">⛰️ ${esc(v.cls)}</div>
+      <div style="z-index:1">${meBox(v.me)}</div>
+      <p class="info" style="z-index:1">أنتِ في المعسكر! 🏕️<br>انظري إلى اللوح وانتظري بدء التحدّي.</p></div>`;
+  } else if (v.phase === 'stage') {
+    const st = v.st || STAGES[v.stage] || { title: '', sub: '' };
+    app.innerHTML = `<div class="screen st">${bgHTML()}<div class="stage-card" style="z-index:1;padding:4vh 6vw"><div class="flag">${['🏕️', '🧗‍♀️', '🚩'][v.stage]}</div><h1>${st.title}</h1><h2>${st.sub}</h2><p>استعدّي! 💪</p></div></div>`;
+    SND.whoosh();
+  } else if (v.phase === 'question') {
+    if (v.answered || ST.answeredQi === v.q.i) {
+      app.innerHTML = `<div class="screen st">${bgHTML()}<div style="z-index:1">${meBox(v.me, '90px')}</div><div style="font-size:70px;z-index:1">✋</div>
+        <p class="info" style="z-index:1">تمّ تسجيل إجابتكِ!<br>انتظري لحظة…</p></div>`;
+      return;
+    }
+    const q = v.q; ST.deadline = Date.now() + q.remain;
+    app.innerHTML = `<div class="screen st st-q">
+      <div class="st-top"><span>السؤال ${ar(q.i + 1)} / ${ar(q.total)}</span>${q.golden ? '<span class="golden-banner">⭐ نقاط مضاعفة</span>' : ''}<span id="stt"></span></div>
+      <div class="st-bar"><div id="stbar" style="width:100%"></div></div>
+      <div class="q-box"><span class="q-type">${esc(q.type)}</span><div class="q-text">${esc(q.text)}</div>${ayahHTML(q.ayah, q.ref)}</div>
+      <div class="st-opts">${q.opts.map((o, i) => `<button class="opt c${i}" data-i="${i}"><span class="shape">${SHAPES[i]}</span><span>${esc(o)}</span></button>`).join('')}</div></div>`;
+    app.querySelectorAll('.st-opts .opt').forEach(b => b.onclick = () => {
+      if (ST.answeredQi === q.i) return;
+      ST.answeredQi = q.i; SND.init(); SND.click();
+      ST.net.send({ t: 'answer', qi: q.i, c: +b.dataset.i });
+      ST.lastKey = ''; ST.view = Object.assign({}, v, { answered: true }); renderStudent();
+    });
+    const loop = () => {
+      const rem = Math.max(0, ST.deadline - Date.now());
+      const bar = $('#stbar'), t = $('#stt'); if (!bar) return;
+      bar.style.width = (rem / (q.T * 1000) * 100) + '%'; t.textContent = '⏱️ ' + ar(Math.ceil(rem / 1000));
+      if (rem > 0) ST.raf = requestAnimationFrame(loop);
+    };
+    loop();
+  } else if (v.phase === 'result') {
+    const r = v.res;
+    let cls, icon, title, body = '';
+    if (r.joinedLate) { cls = 'late'; icon = '🧗‍♀️'; title = 'استعدّي للسؤال القادم!'; }
+    else if (!r.answered) { cls = 'late'; icon = '⏰'; title = 'انتهى الوقت!'; body = `<div class="rank">الإجابة الصحيحة: ${esc(v.correct)}</div>`; }
+    else if (r.ok) { cls = 'ok'; icon = '✅'; title = 'إجابة صحيحة!'; body = `<div class="pts">+${ar(r.pts)}</div>${v.streak >= 3 ? `<div class="streak">🔥 ${ar(v.streak)} إجابات صحيحة متتالية!</div>` : ''}`; }
+    else { cls = 'bad'; icon = '❌'; title = 'إجابة خاطئة'; body = `<div class="rank">الإجابة الصحيحة: ${esc(v.correct)}</div><div class="rank">لا بأس، القمّة ما زالت تنتظركِ! 💪</div>`; }
+    app.innerHTML = `<div class="screen"><div class="res ${cls}"><div class="big">${icon}</div><h1>${title}</h1>${body}
+      <div class="rank">ترتيبكِ: <b>${ar(v.me.rank)}</b> من ${ar(v.n)}<br>مجموعكِ: ${ar(v.me.score)} نقطة</div></div></div>`;
+    if (!r.joinedLate) (r.ok ? SND.correct() : SND.wrong());
+  } else if (v.phase === 'final') {
+    const rk = v.me.rank;
+    const medal = ['🥇', '🥈', '🥉'][rk - 1];
+    app.innerHTML = `<div class="screen st">${bgHTML()}
+      <div style="font-size:90px;z-index:1">${medal || '⛰️'}</div>
+      <h2 style="z-index:1">${rk <= 3 ? 'مبارك! أنتِ من بطلات القمّة' : 'أحسنتِ! أكملتِ التسلّق'}</h2>
+      <div style="z-index:1">${meBox(v.me)}</div>
+      <p class="info" style="z-index:1">ترتيبكِ النهائي: ${ar(rk)} من ${ar(v.n)}<br>${ar(v.me.score)} نقطة</p></div>`;
+    if (rk <= 3) { confetti(6000); SND.fanfare(); } else SND.correct();
+  }
+}
+
+/* ---------------- تشغيل ---------------- */
+if (PARAMS.get('join')) studentInit(); else renderSetup();
+</script>
+</body>
+</html>
