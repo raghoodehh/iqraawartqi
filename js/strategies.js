@@ -138,7 +138,9 @@ const Strat = {
         <div class="qans" hidden><div class="muted" style="font-size:.9rem">${q.judge ? 'النص الصحيح' : 'الإجابة'}</div>${q.answer}</div>
         <div class="qbtns"><button class="btn" data-a="show">إظهار الإجابة</button><button class="btn primary" data-a="ok">✓ إجابة صحيحة</button><button class="btn danger" data-a="no">✗ إجابة خاطئة</button></div></div>`;
       document.body.appendChild(ov);
-      ov.querySelector('[data-a=show]').onclick = e => { ov.querySelector('.qans').hidden = false; e.target.remove(); };
+      const reveal = () => { ov.querySelector('.qans').hidden = false; ov.querySelector('[data-a=show]')?.remove(); };
+      ov.querySelector('[data-a=show]').onclick = reveal;
+      ov.querySelector('.qtext').onclick = reveal;
       ov.querySelector('[data-a=ok]').onclick = () => { ov.remove(); res(true); };
       ov.querySelector('[data-a=no]').onclick = () => { ov.remove(); res(false); };
     });

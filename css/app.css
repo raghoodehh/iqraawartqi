@@ -46,6 +46,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body, #app { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.6; -webkit-tap-highlight-color: transparent; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -254,6 +255,7 @@ textarea { width: 100%; min-height: 160px; border: 1px solid var(--line); border
 .qcard { width: min(900px, 100%); max-height: calc(100% - 20px); overflow: auto; background: var(--surface); border-radius: 22px; border-top: 8px solid var(--tc); padding: 24px 28px; display: grid; gap: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
 .qhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 1.15rem; }
 .qtext { font-size: clamp(1.4rem, 2.6vw, 2.1rem); font-weight: 700; line-height: 1.7; text-align: center; }
+.qcard .qtext { cursor: pointer; }
 .qans { background: var(--paper); color: var(--paper-ink); border-radius: 14px; padding: 14px 18px; font-size: 1.35rem; text-align: center; display: grid; gap: 6px; }
 .qans .muted { color: #6b5a2a; }
 .qbtns { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
