@@ -289,6 +289,7 @@ function renderLesson() {
       ${when}
       <div class="actions">
         ${doneBtn}
+        <button class="btn" data-a="who">${ico('wheel')}مَن تقرأ؟</button>
         <button class="btn primary" data-a="games">${ico('spark')}التحديات</button>
         <button class="btn ${e && e.type === 'sabr' ? 'gold' : ''}" data-a="strat">${ico('dice')}استراتيجيات الحصة</button>
         ${canScore ? `<button class="btn gold" data-a="errors">${ico('pen')}تسجيل الأخطاء</button>` : ''}
@@ -342,6 +343,7 @@ function ico(n) {
     spark: '<path d="M12 2l2.2 6.3L20 10l-5.8 1.7L12 18l-2.2-6.3L4 10l5.8-1.7z" fill="currentColor"/>',
     pen: '<path d="M4 20l4-1 11-11-3-3L5 16zM14 6l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
     dice: '<rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1.5" fill="currentColor"/><circle cx="15" cy="15" r="1.5" fill="currentColor"/><circle cx="15" cy="9" r="1.5" fill="currentColor"/><circle cx="9" cy="15" r="1.5" fill="currentColor"/>',
+    wheel: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5v17M3.5 12h17M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="2" fill="currentColor"/>',
     trophy: '<path d="M7 4h10v4a5 5 0 01-10 0zM7 6H4a3 3 0 003 4M17 6h3a3 3 0 01-3 4M12 13v4M8 20h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   }[n];
   return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -355,6 +357,7 @@ function wireLesson() {
     today() { L.idx = todayIndex(entries(L.grade)); resetEntry(); },
     pos() { const p = sectionStatus(L.sectionId).pos; if (p >= 0) { L.idx = p; resetEntry(); } },
     prog() { openProgress(); },
+    who() { openPicker(L.sectionId); },
     games() { openGames(); },
     strat() { openStrategies(); },
     errors() { openErrors(L.sectionId, curEntry()?.id); },
@@ -638,8 +641,9 @@ async function openStrategies() {
   const label = Q.segLabel(L.segs) || 'صفحة ' + toAr(L.pages[L.pi]);
   const ov = document.createElement('div');
   ov.className = 'games';
-  ov.innerHTML = `<div class="bar"><div class="who">${logoSVG()}<span class="chip">استراتيجيات ${esc(sectionName(L.sectionId))}</span></div><div class="daynav"><div class="when"><b>${esc(label)}</b></div></div><div class="actions"><button class="btn" data-x>العودة إلى المصحف</button></div></div><div class="gbody"></div>`;
+  ov.innerHTML = `<div class="bar"><div class="who">${logoSVG()}<span class="chip">استراتيجيات ${esc(sectionName(L.sectionId))}</span></div><div class="daynav"><div class="when"><b>${esc(label)}</b></div></div><div class="actions"><button class="btn" data-who>${ico('wheel')}مَن تجيب؟</button><button class="btn" data-x>العودة إلى المصحف</button></div></div><div class="gbody"></div>`;
   app().appendChild(ov);
+  ov.querySelector('[data-who]').onclick = () => openPicker(L.sectionId, 'مَن تجيب؟');
   ov.querySelector('[data-x]').onclick = () => { document.querySelectorAll('.qcard-ov').forEach(x => x.remove()); ov.remove(); };
   Strat.mount(ov.querySelector('.gbody'), keys, label);
 }
@@ -862,11 +866,11 @@ function admin(tab = 'plans') {
   if (!S.admin) { home(); adminLoginModal(() => admin(tab)); return; }
   app().innerHTML = `<div class="page-screen"><div class="bar"><div class="who">${logoSVG()}<span class="chip">لوحة الإدارة</span></div>
     <div class="actions" style="margin-inline-start:auto"><button class="btn" data-home>الرئيسية</button><button class="btn danger" data-out>تسجيل الخروج</button></div></div>
-    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['tajweed', 'أحكام التجويد'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
+    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['tajweed', 'أحكام التجويد'], ['names', 'أسماء الطالبات'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
   app().querySelector('[data-home]').onclick = home;
   app().querySelector('[data-out]').onclick = () => { S.admin = null; store.sset('iqra-admin', null); home(); };
   app().querySelectorAll('[data-t]').forEach(b => b.onclick = () => admin(b.dataset.t));
-  ({ plans: adminPlans, track: adminTrack, tajweed: adminTajweed, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
+  ({ plans: adminPlans, track: adminTrack, tajweed: adminTajweed, names: adminNames, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
 }
 
 /* ---------- class tracking (principal only) ---------- */

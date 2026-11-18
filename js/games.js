@@ -198,18 +198,25 @@ function sameFamily(a, b) {
   return fam(a) === fam(b) && a !== b && fam(a) === 'mut';
 }
 
-function drawWheel(cv) {
-  const ctx = cv.getContext('2d'), n = GAMES.length, R = cv.width / 2;
+// items: [{name, color}] (defaults to the challenge games). Segment i spans clockwise from the top.
+const WHEEL_COLORS = ['#0e5a4b', '#a87a22', '#1f5fd1', '#8a2c0a', '#178a3a', '#6b3db3', '#0c7cbc', '#b3261e', '#2f9a63', '#8a6a3a'];
+function drawWheel(cv, items = GAMES) {
+  const ctx = cv.getContext('2d'), n = items.length, R = cv.width / 2;
   ctx.clearRect(0, 0, cv.width, cv.height);
   ctx.translate(R, R);
+  // font fits the segment's width at mid-radius (names wheels can have ~40 segments)
+  const size = Math.max(16, Math.min(44, Math.floor(2 * Math.PI * R * 0.6 / n * 0.62)));
+  const maxW = R * 0.66;
   for (let i = 0; i < n; i++) {
     const a0 = -Math.PI / 2 + i * 2 * Math.PI / n, a1 = a0 + 2 * Math.PI / n;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R - 8, a0, a1); ctx.closePath();
-    ctx.fillStyle = GAMES[i].color; ctx.fill();
-    ctx.lineWidth = 6; ctx.strokeStyle = '#fdf9ec'; ctx.stroke();
+    ctx.fillStyle = items[i].color || WHEEL_COLORS[i % (n % WHEEL_COLORS.length === 1 ? WHEEL_COLORS.length - 1 : WHEEL_COLORS.length)]; ctx.fill();
+    ctx.lineWidth = n > 24 ? 3 : 6; ctx.strokeStyle = '#fdf9ec'; ctx.stroke();
     ctx.save(); ctx.rotate((a0 + a1) / 2);
-    ctx.fillStyle = '#ffffff'; ctx.font = '700 44px "IBM Plex Sans Arabic", Tahoma, sans-serif'; ctx.textAlign = 'center'; ctx.direction = 'rtl'; ctx.textBaseline = 'middle';
-    ctx.fillText(GAMES[i].name, R * 0.58, 0);
+    ctx.fillStyle = '#ffffff'; ctx.font = `700 ${size}px "IBM Plex Sans Arabic", Tahoma, sans-serif`; ctx.textAlign = 'center'; ctx.direction = 'rtl'; ctx.textBaseline = 'middle';
+    let label = items[i].name;
+    while (label.length > 2 && ctx.measureText(label).width > maxW) label = label.slice(0, -2).trim() + '…';
+    ctx.fillText(label, R * 0.58, 0);
     ctx.restore();
   }
   ctx.beginPath(); ctx.arc(0, 0, R * 0.13, 0, Math.PI * 2); ctx.fillStyle = '#fdf9ec'; ctx.fill();
