@@ -36,7 +36,10 @@ function setGradeRules(list) {
 const ruleOn = r => !ALLOWED_RULES || ALLOWED_RULES.has(r);
 
 const RECITERS = [
-  { id: 'MaherAlMuaiqly128kbps', name: 'ماهر المعيقلي' },
+  // one file per surah + verse timings (from Quran.com, saved in data/timings): the 1440 murattal recording
+  { id: 'maher-murattal', name: 'ماهر المعيقلي (مرتّل)', kind: 'surah-timed',
+    audio: s => `https://download.quranicaudio.com/quran/maher_almu3aiqly/year1440/${String(s).padStart(3, '0')}.mp3`, timings: 'data/timings/maher-1440/' },
+  { id: 'MaherAlMuaiqly128kbps', name: 'ماهر المعيقلي (الحرم)' },
   { id: 'Husary_Muallim_128kbps', name: 'الحصري (المعلّم)' },
   { id: 'Husary_128kbps', name: 'محمود خليل الحصري' },
   { id: 'Minshawy_Murattal_128kbps', name: 'محمد صديق المنشاوي' },
@@ -221,11 +224,21 @@ const Player = {
   onAyah: null,
   onStop: null,
   url(s, a) { return `https://everyayah.com/data/${this.reciter}/${String(s).padStart(3, '0')}${String(a).padStart(3, '0')}.mp3`; },
+  rec() { return RECITERS.find(r => r.id === this.reciter) || RECITERS[0]; },
+  get timed() { return this.rec().kind === 'surah-timed'; },
+  // verse timings: only the surah needed is loaded, then kept in memory
+  tcache: {},
+  timings(s) {
+    const r = this.rec(); const k = r.id + '/' + s;
+    if (!this.tcache[k]) this.tcache[k] = fetch(r.timings + String(s).padStart(3, '0') + '.json').then(x => { if (!x.ok) throw new Error('timings'); return x.json(); }).catch(e => { delete this.tcache[k]; throw e; });
+    return this.tcache[k];
+  },
   build(keys) {
     const q = [];
     keys.forEach(k => {
       const [s, a] = k.split(':').map(Number);
-      if (a === 1 && s !== 1 && s !== 9) q.push({ key: k, s: 1, a: 1, basmala: true });
+      // per-ayah files need a separate basmala; in a surah file it is already inside verse 1
+      if (!this.timed && a === 1 && s !== 1 && s !== 9) q.push({ key: k, s: 1, a: 1, basmala: true });
       q.push({ key: k, s, a });
     });
     return q;
@@ -238,14 +251,17 @@ const Player = {
     this.rep = 0;
     this._go();
   },
+  seq: 0, end: null, mon: null,
   _go() {
     const it = this.queue[this.idx];
     if (!it) { this.stop(); return; }
     if (!this.audio) {
       this.audio = new Audio();
-      this.audio.addEventListener('ended', () => this._next());
+      this.audio.addEventListener('ended', () => { if (this.end == null) this._next(); else this._endOfVerse(); });
       this.audio.addEventListener('error', () => { if (!this.audio.getAttribute('src') || this.idx < 0) return; toast('تعذّر تشغيل التلاوة. تأكدي من الاتصال بالإنترنت.'); this.stop(); });
     }
+    if (this.timed) { this._goTimed(it); return; }
+    this.end = null;
     this.audio.src = this.url(it.s, it.a);
     this.applyRate(); // a new file resets the speed, so set it for every ayah
     this.audio.play().catch(() => {});
@@ -253,6 +269,33 @@ const Player = {
     const nx = this.queue[this.idx + 1];
     if (nx) { const pre = new Audio(); pre.preload = 'auto'; pre.src = this.url(nx.s, nx.a); }
   },
+  // surah file + timings: jump to the verse's start, watch for its end
+  async _goTimed(it) {
+    const my = ++this.seq; const a = this.audio;
+    let t;
+    try { t = await this.timings(it.s); } catch (e) { if (my === this.seq) { toast('تعذّر تحميل توقيت الآيات. تأكدي من الاتصال بالإنترنت.'); this.stop(); } return; }
+    if (my !== this.seq || this.idx < 0) return;
+    const seg = t.t[it.a - 1]; if (!seg) { this._next(); return; }
+    const from = seg[0] / 1000, src = this.rec().audio(it.s);
+    if (a.getAttribute('src') !== src) {
+      a.src = src; this.applyRate();
+      const seek = () => { if (my === this.seq) a.currentTime = from; };
+      if (a.readyState >= 1) seek(); else a.addEventListener('loadedmetadata', seek, { once: true });
+    } else if (Math.abs(a.currentTime - from) > 0.35) {
+      a.currentTime = from; // repeat, or a verse that is not the next one: jump; the next verse in order just carries on
+    }
+    this.end = seg[1] / 1000;
+    a.play().catch(() => {});
+    this.onAyah && this.onAyah(it.key);
+    clearInterval(this.mon);
+    // going on to the next verse in order: switch at the boundary (the sound carries on).
+    // stopping, repeating or jumping: let the last syllable finish (a little past the boundary)
+    const nx = this.queue[this.idx + 1];
+    const flows = this.rep + 1 >= this.repeat && nx && nx.s === it.s && nx.a === it.a + 1;
+    const stopAt = flows ? this.end - 0.03 : this.end + 0.1;
+    this.mon = setInterval(() => { if (my === this.seq && this.end != null && !a.paused && a.currentTime >= stopAt) this._endOfVerse(); }, 40);
+  },
+  _endOfVerse() { if (this.end == null) return; this.end = null; clearInterval(this.mon); this._next(); },
   _next() {
     const it = this.queue[this.idx];
     if (it && !it.basmala && ++this.rep < this.repeat) { this._go(); return; }
@@ -263,6 +306,7 @@ const Player = {
   pause() { this.audio && this.audio.pause(); },
   resume() { this.audio && this.audio.play().catch(() => {}); },
   stop(silent) {
+    this.seq++; this.end = null; clearInterval(this.mon);
     if (this.audio) { this.audio.pause(); this.audio.removeAttribute('src'); }
     this.idx = -1; this.queue = [];
     if (!silent && this.onStop) this.onStop();

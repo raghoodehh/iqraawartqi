@@ -161,6 +161,12 @@ async function boot() {
   S.admin = store.sget('iqra-admin', null);
   S.sec = store.sget('iqra-sec', {});
   Player.reciter = store.get('iqra-reciter', S.settings.reciter || RECITERS[0].id);
+  // once only: devices on the old (Haram) Maher recording move to the murattal one; after that the teacher's choice is kept
+  if (!store.get('iqra-reciter-v2', false)) {
+    if (Player.reciter === 'MaherAlMuaiqly128kbps') { Player.reciter = 'maher-murattal'; store.set('iqra-reciter', Player.reciter); }
+    store.set('iqra-reciter-v2', true);
+  }
+  if (!RECITERS.some(r => r.id === Player.reciter)) Player.reciter = RECITERS[0].id;
   // a direct link (#/7/b/quran) wins; otherwise this device opens its section's home
   const last = store.get('iqra-last', null);
   if (parseRoute()) router();
