@@ -435,6 +435,36 @@ button.link:hover { text-decoration: underline; }
 
 #toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); z-index: 60; background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 12px; font-weight: 600; box-shadow: var(--shadow); max-width: calc(100vw - 32px); }
 
+/* teaching tools: highlight, underline, circle (tied to the words) */
+.tools-g { display: inline-flex; gap: 4px; align-items: center; }
+.tool { min-width: 40px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; padding: 0 8px; }
+.tool.on { background: var(--accent-soft); border-color: var(--accent); }
+.mushaf .mk { position: absolute; pointer-events: none; z-index: 1; }
+.mushaf .mk-ring { border: 3px solid var(--ink); border-radius: 999px; }
+.mushaf .mk-ul { background: var(--ink); border-radius: 99px; }
+.mushaf .mk-pre { outline: 2px dashed rgba(14, 90, 75, .55); outline-offset: 2px; border-radius: 4px; }
+.mushaf.pen-mode { touch-action: none; }
+
+/* display mode: the mushaf alone, full width, a few big lines */
+.lesson.presenting .bar, .lesson.presenting .side, .lesson.presenting .tools, .lesson.presenting .segtabs, .lesson.presenting .pagenav { display: none !important; }
+.lesson.presenting .page-wrap { position: fixed; inset: 0; z-index: 35; background: #fdf9ec; overflow-y: auto; overflow-x: hidden; padding: 12px 0 0; display: block; outline: none; scroll-behavior: auto; }
+.lesson.presenting #mushaf-host { display: grid; justify-items: center; }
+.lesson.presenting .mushaf { box-shadow: none; border-radius: 0; background: #fdf9ec; }
+.lesson.presenting .mushaf .hdr { display: none; }
+.pop.big { width: min(760px, calc(100vw - 32px)); padding: 1em 1.2em; z-index: 45; }
+.pop.big .qw { font-size: 2.3em; }
+.pop.big .btn { font-size: 1em; min-height: 2.4em; }
+.pctl { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 40; display: grid; justify-items: center; gap: 8px; }
+.pctl-row { display: flex; gap: 6px; padding: 6px; border-radius: 20px; background: rgba(21, 49, 43, .55); backdrop-filter: blur(4px); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.pctl-row > button { min-width: clamp(64px, 6vh, 130px); height: clamp(60px, 5.6vh, 120px); border-radius: 14px; border: 0; background: rgba(255,255,255,.88); color: #15312b; font: inherit; font-size: clamp(1.5rem, 2.6vh, 3.2rem); font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 12px; }
+.pctl-row > button.on { background: #fff3c4; box-shadow: inset 0 0 0 3px #a87a22; }
+.pctl-row small { font-size: .55em; font-weight: 600; }
+.pctl-tray, .pctl-menu { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 8px 10px; border-radius: 16px; background: rgba(255,255,255,.95); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.pctl-tray .tool { min-width: clamp(56px, 5.2vh, 112px); height: clamp(52px, 4.8vh, 104px); font-size: clamp(1.3rem, 2.2vh, 2.6rem); }
+.pctl-tray .pen { width: clamp(44px, 4vh, 88px); height: clamp(44px, 4vh, 88px); }
+.pctl-menu button { min-height: clamp(52px, 4.8vh, 104px); padding: 0 18px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: #15312b; font: inherit; font-size: clamp(1.15rem, 2vh, 2.4rem); font-weight: 700; cursor: pointer; }
+.pctl-menu button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
 /* section portal: navigation, home (hub), prayer, adhkar */
 .pnav { display: flex; gap: 4px; flex-wrap: wrap; }
 .pnav .btn { text-decoration: none; padding-inline: .8em; }

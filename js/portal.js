@@ -15,6 +15,7 @@ function router() {
   const r = parseRoute();
   if (!r) { home(); return; }
   store.set('iqra-last', r.id);
+  if (S.lesson && S.lesson.present) exitPresent();
   document.querySelectorAll('.picker-ov, .qm-review, .qm-frame').forEach(x => x.remove());
   if (r.part === 'quran') openLesson(r.id);
   else if (r.part === 'prayer') prayerScreen(r.id);

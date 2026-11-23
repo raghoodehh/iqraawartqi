@@ -183,6 +183,7 @@ function frame(inner, crumbs) {
   app().querySelector('[data-go=admin]').onclick = () => admin();
 }
 function home() {
+  if (S.lesson && S.lesson.present) exitPresent();
   Player.stop(true); S.lesson = null;
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   const last = store.get('iqra-last', null);
@@ -216,6 +217,7 @@ function sections(grade) {
 /* ---------- lesson ---------- */
 function openLesson(sectionId) {
   store.set('iqra-last', sectionId);
+  if (S.lesson && S.lesson.present) exitPresent();
   const grade = sectionId.split('-')[0];
   setGradeRules(gradeRules(grade));
   const list = entries(grade);
@@ -224,7 +226,8 @@ function openLesson(sectionId) {
     sectionId, grade, free, idx: free ? -1 : startIndex(sectionId), freePage: store.get('iqra-free-' + grade, 1),
     part: -1, pages: [], pi: 0, portion: null, keys: [],
     tajweed: store.get('iqra-tj', false), gharib: store.get('iqra-gh', true), showAll: false,
-    pen: null, hl: {}, sel: null, tab: 'tafsir', zoom: 1, seq: 0, page: null,
+    pen: null, tool: 'hl', hl: {}, sel: null, tab: 'tafsir', zoom: 1, seq: 0, page: null,
+    present: false, lines: store.get('iqra-present-lines', 6),
   };
   renderLesson();
 }
@@ -296,6 +299,7 @@ function renderLesson() {
       ${when}
       <div class="actions">
         ${doneBtn}
+        <button class="btn" data-a="present" title="المصحف وحده بخط كبير على الشاشة">🖥️ وضع العرض</button>
         <button class="btn" data-a="who">${ico('wheel')}مَن تقرأ؟</button>
         <button class="btn primary" data-a="games">${ico('spark')}التحديات</button>
         <button class="btn ${e && e.type === 'sabr' ? 'gold' : ''}" data-a="strat">${ico('dice')}استراتيجيات الحصة</button>
@@ -317,13 +321,13 @@ function renderLesson() {
           <button class="btn ${L.gharib ? 'on' : ''}" data-a="gh">الكلمات الصعبة</button>
           ${L.portion ? `<button class="btn ${L.showAll ? 'on' : ''}" data-a="all">الصفحة كاملة</button>` : ''}
           <span class="sep"></span>
-          <span class="pens" role="group" aria-label="التظليل المؤقت"><button class="pen y ${L.pen === 'y' ? 'on' : ''}" data-pen="y" aria-label="قلم أصفر"></button><button class="pen g ${L.pen === 'g' ? 'on' : ''}" data-pen="g" aria-label="قلم أخضر"></button><button class="pen p ${L.pen === 'p' ? 'on' : ''}" data-pen="p" aria-label="قلم وردي"></button>
-          <button class="btn sm ghost" data-a="clearhl">مسح التظليل</button></span>
+          ${toolsHTML()}
+          <button class="btn sm ghost" data-a="clearhl">مسح العلامات</button>
           <span class="sep"></span>
           <button class="btn sm" data-a="zout" aria-label="تصغير">−</button><button class="btn sm" data-a="zin" aria-label="تكبير">+</button>
           <button class="btn sm" data-a="fs">ملء الشاشة</button>
         </div>
-        <div class="page-wrap" id="page-wrap">
+        <div class="page-wrap" id="page-wrap" tabindex="-1">
           <div class="segtabs" id="segtabs"></div>
           <div id="mushaf-host" style="display:grid;justify-items:center"></div>
           <div class="pagenav" id="pagenav"></div>
@@ -335,6 +339,7 @@ function renderLesson() {
       </aside>
     </div></div>`;
   wireLesson();
+  if (L.present) app().querySelector('.lesson').classList.add('presenting');
   if (L.free) { $('#sura-pick').value = String(firstSuraOnPage(L.freePage)); }
   $('#repeat').value = String(Player.repeat);
   renderSegTabs();
@@ -381,18 +386,14 @@ function wireLesson() {
     tj() { L.tajweed = !L.tajweed; store.set('iqra-tj', L.tajweed); renderLessonKeepPage(); },
     gh() { L.gharib = !L.gharib; store.set('iqra-gh', L.gharib); $('[data-a=gh]').classList.toggle('on', L.gharib); L.page && L.page.el.classList.toggle('no-gh', !L.gharib); },
     all() { L.showAll = !L.showAll; $('[data-a=all]').classList.toggle('on', L.showAll); L.page && L.page.el.classList.toggle('showall', L.showAll); },
-    clearhl() { L.hl = {}; document.querySelectorAll('.hl-y,.hl-g,.hl-p').forEach(x => x.classList.remove('hl-y', 'hl-g', 'hl-p')); },
+    clearhl() { clearMarks(); },
+    present() { enterPresent(); },
     zin() { L.zoom = Math.min(2.2, L.zoom + 0.15); fit(); },
     zout() { L.zoom = Math.max(0.6, L.zoom - 0.15); fit(); },
     fs() { const el = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen())?.catch?.(() => toast('ملء الشاشة غير متاح هنا')); },
   };
   app().querySelectorAll('[data-a]').forEach(b => { if (act[b.dataset.a]) b.onclick = act[b.dataset.a]; });
-  app().querySelectorAll('[data-pen]').forEach(b => b.onclick = () => {
-    L.pen = L.pen === b.dataset.pen ? null : b.dataset.pen;
-    app().querySelectorAll('[data-pen]').forEach(x => x.classList.toggle('on', x.dataset.pen === L.pen));
-    L.page && L.page.el.classList.toggle('pen-mode', !!L.pen);
-    if (L.pen) toast('اضغطي على الكلمات لتظليلها، واضغطي القلم مرة أخرى لإيقافه');
-  });
+  wireTools(app());
   app().querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { L.tab = b.dataset.tab; app().querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b)); renderPanel(); });
   $('#reciter').onchange = e => { Player.reciter = e.target.value; store.set('iqra-reciter', Player.reciter); if (Player.playing) { const k = Player.queue[Player.idx]?.key; Player.play(Player.queue.filter(x => !x.basmala).map(x => x.key), k); } };
   $('#repeat').onchange = e => { Player.repeat = +e.target.value; };
@@ -408,7 +409,7 @@ function afterFreePage() { const L = S.lesson; store.set('iqra-free-' + L.grade,
 function resetEntry() { Player.stop(true); const L = S.lesson; L.part = -1; L.pi = 0; L.hl = {}; L.sel = null; renderLesson(); }
 function renderLessonKeepPage() { const L = S.lesson; const pi = L.pi; renderLesson(); L.pi = pi; }
 function pageKeys() { const L = S.lesson; return L.page ? [...new Set(L.page.tokens.filter(t => t.kind === 'w').map(t => t.key))] : []; }
-function setPlayBtn(on) { const b = $('#play-btn'); if (b) b.innerHTML = on ? ico('pause') + 'إيقاف مؤقت' : ico('play') + 'استماع'; }
+function setPlayBtn(on) { const b = $('#play-btn'); if (b) b.innerHTML = on ? ico('pause') + 'إيقاف مؤقت' : ico('play') + 'استماع'; syncPlay(); }
 
 function renderSegTabs() {
   const L = S.lesson;
@@ -442,8 +443,7 @@ async function showPage() {
   page.el.classList.toggle('no-gh', !L.gharib);
   page.el.classList.toggle('showall', L.showAll);
   page.el.classList.toggle('pen-mode', !!L.pen);
-  const hl = L.hl[pageNo] || {};
-  Object.entries(hl).forEach(([t, c]) => page.tokens[t]?.el.classList.add('hl-' + c));
+  wireMarking(page.el);
   if (!L.sel || !page.tokens.some(t => t.key === L.sel)) L.sel = (L.keys.find(k => page.tokens.some(t => t.key === k))) || page.tokens.find(t => t.kind === 'w')?.key || null;
   markSelected();
   page.el.onclick = ev => onWordClick(ev);
@@ -464,6 +464,16 @@ function fit() {
   const L = S.lesson; if (!L || !L.page) return;
   const wrap = $('#page-wrap');
   if (!wrap || !L.page.el.isConnected) return;
+  if (L.present) {
+    presentFit(); renderMarks();
+    // keep the ayah being read (or the selected one) where the eye is
+    centerAyah((Player.playing && Player.queue[Player.idx]?.key) || L.sel, false);
+    return;
+  }
+  wrap.style.paddingBottom = '';
+  fitBoard(L, wrap); renderMarks();
+}
+function fitBoard(L, wrap) {
   const availW = wrap.clientWidth - 40;
   const narrow = window.innerWidth <= 1000;
   const availH = narrow ? 99999 : wrap.clientHeight - ($('#segtabs').offsetHeight + $('#pagenav').offsetHeight + 60);
@@ -479,6 +489,9 @@ function markSelected() {
 function markPlaying(key) {
   const L = S.lesson; if (!L || !L.page) return;
   L.page.tokens.forEach(t => t.el.classList.toggle('playing', !!key && t.key === key));
+  // display mode follows the recitation: the ayah being read stays in the middle of the screen
+  if (L.present && key && Player.playing && L.page.tokens.some(t => t.key === key)) centerAyah(key);
+  syncPlay();
   if (key && !L.page.tokens.some(t => t.key === key) && !L.free) {
     const [s, a] = key.split(':').map(Number); const p = Q.pageOf(s, a); const i = L.pages.indexOf(p);
     if (i >= 0 && i !== L.pi) { L.pi = i; showPage(); }
@@ -490,13 +503,7 @@ function onWordClick(ev) {
   if (!el || el.classList.contains('bs')) return;
   const tok = L.page.tokens[+el.dataset.t];
   if (!tok) return;
-  if (L.pen) {
-    const pg = L.pages[L.pi]; const map = L.hl[pg] = L.hl[pg] || {};
-    ['hl-y', 'hl-g', 'hl-p'].forEach(c => el.classList.remove(c));
-    if (map[el.dataset.t] === L.pen) delete map[el.dataset.t];
-    else { map[el.dataset.t] = L.pen; el.classList.add('hl-' + L.pen); }
-    return;
-  }
+  if (L.pen) return; // a teaching tool is on: wireMarking() handles taps and drags
   L.sel = tok.key; markSelected(); renderPanel();
   wordPopover(tok, el);
 }
@@ -517,6 +524,8 @@ async function wordPopover(tok, el) {
   body += `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm primary" data-pa>${ico('play')}استماع للآية</button><button class="btn sm" data-pt>تفسير الآية</button></div>`;
   const pop = document.createElement('div');
   pop.className = 'pop'; pop.id = 'pop';
+  // display mode: a bigger window, in proportion to the mushaf's text on the screen
+  if (S.lesson.present) { pop.classList.add('big'); pop.style.fontSize = Math.max(18, Math.min(34, parseFloat(S.lesson.page.el.style.fontSize || 24) * .36)) + 'px'; }
   pop.innerHTML = `<button class="btn sm ghost close" aria-label="إغلاق">✕</button>${body}`;
   document.body.appendChild(pop);
   const r = el.getBoundingClientRect(), pr = pop.getBoundingClientRect();
