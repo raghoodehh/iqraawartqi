@@ -298,34 +298,39 @@ function renderLesson() {
       ${portalNav(L.sectionId, 'quran')}
       ${when}
       <div class="actions">
-        ${doneBtn}
+        ${doneBtn}${canScore ? `<button class="btn gold" data-a="errors">${ico('pen')}تسجيل الأخطاء</button>` : ''}
         <button class="btn" data-a="present" title="المصحف وحده بخط كبير على الشاشة">🖥️ وضع العرض</button>
-        <button class="btn" data-a="who">${ico('wheel')}مَن تقرأ؟</button>
-        <button class="btn primary" data-a="games">${ico('spark')}التحديات</button>
-        <button class="btn ${e && e.type === 'sabr' ? 'gold' : ''}" data-a="strat">${ico('dice')}استراتيجيات الحصة</button>
-        ${canScore ? `<button class="btn gold" data-a="errors">${ico('pen')}تسجيل الأخطاء</button>` : ''}
-        ${g.noCompetition ? '' : `<button class="btn" data-a="board">${ico('trophy')}الترتيب</button>`}
-        <button class="btn" data-a="home">تغيير الصف</button>
+        <div class="dd end"><button class="btn ${e && SCORED.includes(e.type) ? 'gold' : 'primary'}" data-dd aria-haspopup="true" aria-expanded="false">${ico('spark')}الأنشطة ▾</button>
+          <div class="dd-menu" role="menu" hidden>
+            <button role="menuitem" data-a="games">${ico('spark')}التحديات</button>
+            <button role="menuitem" data-a="strat">${ico('dice')}استراتيجيات الحصة</button>
+            <button role="menuitem" data-a="who">${ico('wheel')}مَن تقرأ؟</button>
+          </div></div>
+        <div class="dd end"><button class="btn" data-dd aria-haspopup="true" aria-expanded="false" aria-label="المزيد">⋯</button>
+          <div class="dd-menu" role="menu" hidden>
+            ${g.noCompetition ? '' : `<button role="menuitem" data-a="board">${ico('trophy')}الترتيب</button>`}
+            <button role="menuitem" data-a="home">تغيير الصف</button>
+          </div></div>
       </div>
       ${lagBar}
     </div>
     <div class="stage">
       <div class="reader">
         <div class="tools">
-          <select id="reciter" aria-label="القارئ">${RECITERS.map(r => `<option value="${r.id}" ${r.id === Player.reciter ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>
-          <button class="btn primary" data-a="play" id="play-btn">${ico('play')}استماع</button>
-          <button class="btn" data-a="stop" aria-label="إيقاف">${ico('stop')}</button>
-          <select id="repeat" aria-label="تكرار الآية"><option value="1">بدون تكرار</option><option value="2">تكرار الآية ×٢</option><option value="3">تكرار الآية ×٣</option></select>
-          <span class="sep"></span>
-          <button class="btn ${L.tajweed ? 'on' : ''}" data-a="tj">ألوان التجويد</button>
-          <button class="btn ${L.gharib ? 'on' : ''}" data-a="gh">الكلمات الصعبة</button>
-          ${L.portion ? `<button class="btn ${L.showAll ? 'on' : ''}" data-a="all">الصفحة كاملة</button>` : ''}
-          <span class="sep"></span>
-          ${toolsHTML()}
-          <button class="btn sm ghost" data-a="clearhl">مسح العلامات</button>
-          <span class="sep"></span>
-          <button class="btn sm" data-a="zout" aria-label="تصغير">−</button><button class="btn sm" data-a="zin" aria-label="تكبير">+</button>
-          <button class="btn sm" data-a="fs">ملء الشاشة</button>
+          <div class="dd btn-split"><button class="btn primary" data-a="play" id="play-btn">${ico('play')}استماع</button><button class="btn primary dd-caret" data-dd aria-haspopup="true" aria-expanded="false" aria-label="القارئ والتكرار">▾</button>
+            <div class="dd-menu dd-form" hidden>
+              <label for="reciter">القارئ</label><select id="reciter">${RECITERS.map(r => `<option value="${r.id}" ${r.id === Player.reciter ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>
+              <label for="repeat">تكرار الآية</label><select id="repeat"><option value="1">بدون تكرار</option><option value="2">تكرار الآية ×٢</option><option value="3">تكرار الآية ×٣</option></select>
+              <button class="btn" data-a="stop">${ico('stop')}إيقاف التلاوة</button>
+            </div></div>
+          <div class="dd"><button class="btn" data-dd aria-haspopup="true" aria-expanded="false">👁️ العرض ▾</button>
+            <div class="dd-menu" role="menu" hidden>
+              <button role="menuitemcheckbox" class="${L.tajweed ? 'on' : ''}" aria-checked="${L.tajweed}" data-a="tj"><span class="chk"></span>ألوان التجويد</button>
+              <button role="menuitemcheckbox" class="${L.gharib ? 'on' : ''}" aria-checked="${L.gharib}" data-a="gh" data-keep><span class="chk"></span>الكلمات الصعبة</button>
+              ${L.portion ? `<button role="menuitemcheckbox" class="${L.showAll ? 'on' : ''}" aria-checked="${L.showAll}" data-a="all" data-keep><span class="chk"></span>الصفحة كاملة</button>` : ''}
+            </div></div>
+          <button class="btn ${L.pen ? 'on' : ''}" id="tl-edit" aria-pressed="${!!L.pen}">✏️ أدوات التعليم</button>
+          <span class="tl-tray" id="tl-tray" ${L.pen ? '' : 'hidden'}>${toolsHTML()}<button class="btn sm ghost" data-a="clearhl">🧽 مسح</button></span>
         </div>
         <div class="page-wrap" id="page-wrap" tabindex="-1">
           <div class="segtabs" id="segtabs"></div>
@@ -384,8 +389,8 @@ function wireLesson() {
     },
     stop() { Player.stop(); },
     tj() { L.tajweed = !L.tajweed; store.set('iqra-tj', L.tajweed); renderLessonKeepPage(); },
-    gh() { L.gharib = !L.gharib; store.set('iqra-gh', L.gharib); $('[data-a=gh]').classList.toggle('on', L.gharib); L.page && L.page.el.classList.toggle('no-gh', !L.gharib); },
-    all() { L.showAll = !L.showAll; $('[data-a=all]').classList.toggle('on', L.showAll); L.page && L.page.el.classList.toggle('showall', L.showAll); },
+    gh() { L.gharib = !L.gharib; store.set('iqra-gh', L.gharib); const b = $('[data-a=gh]'); b.classList.toggle('on', L.gharib); b.setAttribute('aria-checked', L.gharib); L.page && L.page.el.classList.toggle('no-gh', !L.gharib); },
+    all() { L.showAll = !L.showAll; const b = $('[data-a=all]'); b.classList.toggle('on', L.showAll); b.setAttribute('aria-checked', L.showAll); L.page && L.page.el.classList.toggle('showall', L.showAll); },
     clearhl() { clearMarks(); },
     present() { enterPresent(); },
     zin() { L.zoom = Math.min(2.2, L.zoom + 0.15); fit(); },
@@ -394,6 +399,9 @@ function wireLesson() {
   };
   app().querySelectorAll('[data-a]').forEach(b => { if (act[b.dataset.a]) b.onclick = act[b.dataset.a]; });
   wireTools(app());
+  wireMenus(app());
+  // ✏️ teaching tools: on with the last tool (highlight by default) in yellow, off again with a second tap
+  $('#tl-edit').onclick = () => { L.pen = L.pen ? null : 'y'; syncTools(); };
   app().querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { L.tab = b.dataset.tab; app().querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b)); renderPanel(); });
   $('#reciter').onchange = e => { Player.reciter = e.target.value; store.set('iqra-reciter', Player.reciter); if (Player.playing) { const k = Player.queue[Player.idx]?.key; Player.play(Player.queue.filter(x => !x.basmala).map(x => x.key), k); } };
   $('#repeat').onchange = e => { Player.repeat = +e.target.value; };

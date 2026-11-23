@@ -437,6 +437,23 @@ button.link:hover { text-decoration: underline; }
 
 /* teaching tools: highlight, underline, circle (tied to the words) */
 .tools-g { display: inline-flex; gap: 4px; align-items: center; }
+/* drop-down menus in the lesson bars */
+.dd { position: relative; display: inline-flex; }
+.dd-menu { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 30; min-width: 230px; display: grid; gap: 2px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 12px 34px rgba(0,0,0,.18); }
+.dd.end .dd-menu { inset-inline-start: auto; inset-inline-end: 0; }
+.dd-menu > button { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 14px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; font-weight: 600; text-align: start; cursor: pointer; white-space: nowrap; }
+.dd-menu > button:hover { background: var(--surface-2); }
+.dd-menu .chk { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line); flex: none; display: grid; place-items: center; }
+.dd-menu .on .chk { background: var(--accent); border-color: var(--accent); }
+.dd-menu .on .chk::after { content: '✓'; color: #fff; font-size: .8rem; font-weight: 700; }
+.dd-form { min-width: 260px; padding: 12px; gap: 6px; }
+.dd-form label { font-weight: 700; font-size: .9rem; color: var(--muted); }
+.dd-form select { width: 100%; max-width: none; min-height: 46px; }
+.dd-form .btn { margin-top: 6px; }
+.btn-split > .btn:first-child { border-start-end-radius: 0; border-end-end-radius: 0; }
+.btn-split > .dd-caret { border-start-start-radius: 0; border-end-start-radius: 0; padding-inline: .7em; border-inline-start: 1px solid rgba(255,255,255,.35); }
+.tl-tray { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 3px 8px; border-radius: 12px; background: var(--surface); border: 1px dashed var(--accent); }
+.tl-tray[hidden] { display: none !important; }
 .tool { min-width: 40px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; padding: 0 8px; }
 .tool.on { background: var(--accent-soft); border-color: var(--accent); }
 .mushaf .mk { position: absolute; pointer-events: none; z-index: 1; }

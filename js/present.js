@@ -80,7 +80,31 @@ function syncTools() {
   document.querySelectorAll('[data-tool]').forEach(x => x.classList.toggle('on', !!L.pen && x.dataset.tool === L.tool));
   L.page && L.page.el.classList.toggle('pen-mode', !!L.pen);
   const ed = document.getElementById('pc-edit'); if (ed) ed.classList.toggle('on', !!L.pen);
+  const te = document.getElementById('tl-edit'); if (te) { te.classList.toggle('on', !!L.pen); te.setAttribute('aria-pressed', !!L.pen); }
+  const tt = document.getElementById('tl-tray'); if (tt) tt.hidden = !L.pen;
 }
+
+/* ---------- small drop-down menus (lesson bars) ---------- */
+function closeMenus(except) {
+  document.querySelectorAll('.dd-menu').forEach(m => { if (m !== except && !m.hidden) { m.hidden = true; m.parentElement.querySelector('[data-dd]')?.setAttribute('aria-expanded', 'false'); } });
+}
+function wireMenus(root) {
+  root.querySelectorAll('.dd').forEach(dd => {
+    const btn = dd.querySelector('[data-dd]'), menu = dd.querySelector('.dd-menu');
+    btn.onclick = e => {
+      e.stopPropagation(); const open = menu.hidden; closeMenus(menu); menu.hidden = !open; btn.setAttribute('aria-expanded', open);
+      if (open) { // keep the menu inside the screen on narrow devices
+        menu.style.transform = ''; const r = menu.getBoundingClientRect();
+        const dx = r.right > innerWidth - 8 ? innerWidth - 8 - r.right : r.left < 8 ? 8 - r.left : 0;
+        if (dx) menu.style.transform = `translateX(${dx}px)`;
+      }
+    };
+    // choosing an item closes the menu, except on/off switches (data-keep) and the reciter form
+    menu.addEventListener('click', e => { const it = e.target.closest('button'); if (it && !it.hasAttribute('data-keep')) setTimeout(() => closeMenus(), 0); });
+  });
+}
+document.addEventListener('pointerdown', e => { if (!e.target.closest || !e.target.closest('.dd')) closeMenus(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
 // toolbar: tapping the active colour again switches the tool off. Display-mode tray: colours only select (✏️ switches off).
 function setPen(color, toggle = true) {
   const L = S.lesson; L.pen = toggle && L.pen === color ? null : color; syncTools();
