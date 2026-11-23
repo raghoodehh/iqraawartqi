@@ -317,7 +317,10 @@ tr.winner td { background: var(--gold-soft); }
 .barrow.best .fill { background: var(--gold); }
 
 /* admin */
-.admin-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.admin-tabs { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.admin-tabs .tab { min-height: 48px; font-size: 1.02rem; cursor: pointer; }
+.adm-groups { display: flex; gap: 6px; flex-wrap: wrap; margin-inline: auto; }
+.adm-groups .btn { min-height: 48px; font-size: 1.02rem; }
 .plan-table input, .plan-table select { min-height: 38px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 0 8px; }
 .plan-table input[type="number"] { width: 5em; }
 .plan-table td { padding: 6px 8px; }

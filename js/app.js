@@ -892,15 +892,30 @@ async function certificate({ grade, letter, mk, row }) {
 }
 
 /* ---------- admin ---------- */
-function admin(tab = 'plans') {
+// the admin panel in four sections; each section has its own pages
+const ADMIN_GROUPS = [
+  { id: 'follow', icon: '📊', name: 'المتابعة', pages: [['track', 'متابعة الصفوف'], ['errors', 'الأخطاء المسجّلة']] },
+  { id: 'content', icon: '📚', name: 'المحتوى', pages: [['plans', 'الخطط'], ['tajweed', 'أحكام التجويد'], ['adhkar', 'الأذكار'], ['notes', 'القصص وأسباب النزول']] },
+  { id: 'sections', icon: '👥', name: 'الشعب', pages: [['names', 'أسماء الطالبات وعددهن'], ['pw', 'كلمات المرور']] },
+  { id: 'settings', icon: '⚙️', name: 'الإعدادات', pages: [['settings', 'الإعدادات']] },
+];
+function admin(tab) {
   Player.stop(true);
+  tab = tab || store.get('iqra-adm-tab', 'track');
+  const group = ADMIN_GROUPS.find(g => g.pages.some(([k]) => k === tab)) || ADMIN_GROUPS[0];
+  if (!group.pages.some(([k]) => k === tab)) tab = group.pages[0][0];
   if (!S.admin) { home(); adminLoginModal(() => admin(tab)); return; }
+  store.set('iqra-adm-tab', tab);
   app().innerHTML = `<div class="page-screen"><div class="bar"><div class="who">${logoSVG()}<span class="chip">لوحة الإدارة</span></div>
-    <div class="actions" style="margin-inline-start:auto"><button class="btn" data-home>الرئيسية</button><button class="btn danger" data-out>تسجيل الخروج</button></div></div>
-    <div class="content"><div class="admin-tabs">${[['plans', 'الخطط'], ['track', 'متابعة الصفوف'], ['tajweed', 'أحكام التجويد'], ['names', 'أسماء الطالبات'], ['adhkar', 'الأذكار'], ['errors', 'الأخطاء المسجّلة'], ['pw', 'كلمات المرور'], ['notes', 'القصص وأسباب النزول'], ['settings', 'الإعدادات']].map(([k, n]) => `<button class="btn ${k === tab ? 'on' : ''}" data-t="${k}">${n}</button>`).join('')}</div><div id="adm"></div></div></div>`;
+    <nav class="adm-groups" aria-label="أقسام لوحة الإدارة">${ADMIN_GROUPS.map(g => `<button class="btn ${g === group ? 'on' : ''}" data-g="${g.id}" ${g === group ? 'aria-current="page"' : ''}>${g.icon} ${g.name}</button>`).join('')}</nav>
+    <div class="actions"><button class="btn" data-home>الرئيسية</button><button class="btn danger" data-out>تسجيل الخروج</button></div></div>
+    <div class="content">${group.pages.length > 1 ? `<div class="admin-tabs" role="tablist">${group.pages.map(([k, n]) => `<button class="tab ${k === tab ? 'on' : ''}" role="tab" aria-selected="${k === tab}" data-t="${k}">${n}</button>`).join('')}</div>` : ''}<div id="adm"></div></div></div>`;
   app().querySelector('[data-home]').onclick = home;
   app().querySelector('[data-out]').onclick = () => { S.admin = null; store.sset('iqra-admin', null); home(); };
+  // a section opens on the page it was last on
+  app().querySelectorAll('[data-g]').forEach(b => b.onclick = () => { const g = ADMIN_GROUPS.find(x => x.id === b.dataset.g); admin(store.get('iqra-adm-' + g.id, g.pages[0][0])); });
   app().querySelectorAll('[data-t]').forEach(b => b.onclick = () => admin(b.dataset.t));
+  store.set('iqra-adm-' + group.id, tab);
   ({ plans: adminPlans, track: adminTrack, tajweed: adminTajweed, names: adminNames, adhkar: adminAdhkar, errors: adminErrors, pw: adminPw, notes: adminNotes, settings: adminSettings })[tab]();
 }
 
