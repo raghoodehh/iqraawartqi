@@ -121,6 +121,19 @@ function wireTools(root, toggle = true) {
   root.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
 }
 
+/* ---------- recitation speed ---------- */
+const RATES = [0.75, 0.85, 1];
+const rateLabel = r => toAr(String(r).replace(/^0/, '٠')).replace('.', '٫') + '×';
+function setRate(r) {
+  Player.setRate(r);
+  document.querySelectorAll('[data-rate]').forEach(b => { const on = +b.dataset.rate === r; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  document.querySelectorAll('.rate-badge').forEach(x => { x.hidden = r === 1; x.textContent = rateLabel(r); });
+  const pr = document.getElementById('pc-rate'); if (pr) pr.textContent = rateLabel(r);
+  toast('سرعة التلاوة: ' + rateLabel(r));
+}
+// one tap moves to the next speed: 1× → 0.85× → 0.75× → 1×
+function cycleRate() { const order = [1, 0.85, 0.75]; setRate(order[(order.indexOf(Player.rate) + 1) % order.length]); }
+
 /* ---------- display mode ---------- */
 const PRESENT_LINES = [4, 6, 8, 10, 'all'];
 function enterPresent() {
@@ -155,6 +168,7 @@ function drawPresentBar() {
     <div class="pctl-menu" id="pc-lines" hidden>${PRESENT_LINES.map(v => `<button class="${v === L.lines ? 'on' : ''}" data-lines="${v}">${v === 'all' ? 'الصفحة كاملة' : toAr(v) + ' أسطر'}</button>`).join('')}</div>
     <div class="pctl-row">
       <button id="pc-play" aria-label="تشغيل أو إيقاف">${Player.playing ? '⏸️' : '▶️'}</button>
+      <button id="pc-rate" aria-label="سرعة التلاوة">${rateLabel(Player.rate)}</button>
       <button id="pc-edit" class="${L.pen ? 'on' : ''}" aria-label="أدوات التعليم">✏️</button>
       <button id="pc-clear" aria-label="مسح العلامات في هذه الصفحة">🧽</button>
       <button id="pc-n" aria-label="عدد الأسطر">${n} <small>أسطر</small></button>
@@ -162,6 +176,7 @@ function drawPresentBar() {
     </div>`;
   wireTools(bar, false);
   bar.querySelector('#pc-play').onclick = () => togglePlay();
+  bar.querySelector('#pc-rate').onclick = cycleRate;
   bar.querySelector('#pc-edit').onclick = () => {
     if (L.pen) { L.pen = null; syncTools(); bar.querySelector('#pc-tray').hidden = true; }
     else { L.pen = 'y'; L.tool = L.tool || 'hl'; syncTools(); bar.querySelector('#pc-tray').hidden = false; }

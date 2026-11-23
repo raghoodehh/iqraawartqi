@@ -205,6 +205,17 @@ const Player = {
   queue: [],
   idx: -1,
   repeat: 1,
+  // recitation speed (0.75 / 0.85 / 1), remembered on this device; the pitch stays natural
+  rate: (() => { try { const r = +JSON.parse(localStorage.getItem('iqra-rate')); return [0.75, 0.85, 1].includes(r) ? r : 1; } catch (e) { return 1; } })(),
+  setRate(r) {
+    this.rate = r; try { localStorage.setItem('iqra-rate', JSON.stringify(r)); } catch (e) { /* this session only */ }
+    if (this.audio) this.applyRate();
+  },
+  applyRate() {
+    const a = this.audio;
+    a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
+    a.defaultPlaybackRate = this.rate; a.playbackRate = this.rate;
+  },
   rep: 0,
   reciter: RECITERS[0].id,
   onAyah: null,
@@ -236,6 +247,7 @@ const Player = {
       this.audio.addEventListener('error', () => { if (!this.audio.getAttribute('src') || this.idx < 0) return; toast('تعذّر تشغيل التلاوة. تأكدي من الاتصال بالإنترنت.'); this.stop(); });
     }
     this.audio.src = this.url(it.s, it.a);
+    this.applyRate(); // a new file resets the speed, so set it for every ayah
     this.audio.play().catch(() => {});
     this.onAyah && this.onAyah(it.key);
     const nx = this.queue[this.idx + 1];

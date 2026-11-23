@@ -455,6 +455,12 @@ button.link:hover { text-decoration: underline; }
 .dd-form .btn { margin-top: 6px; }
 .btn-split > .btn:first-child { border-start-end-radius: 0; border-end-end-radius: 0; }
 .btn-split > .dd-caret { border-start-start-radius: 0; border-end-start-radius: 0; padding-inline: .7em; border-inline-start: 1px solid rgba(255,255,255,.35); }
+.dd-lbl { font-weight: 700; font-size: .9rem; color: var(--muted); }
+.rate-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.rate-seg button { min-height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+.rate-seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rate-badge { font-size: .8em; font-weight: 700; background: rgba(255,255,255,.25); border-radius: 6px; padding: 0 4px; margin-inline-end: 4px; }
+.rate-badge[hidden] { display: none; }
 .tl-tray { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 3px 8px; border-radius: 12px; background: var(--surface); border: 1px dashed var(--accent); }
 .tl-tray[hidden] { display: none !important; }
 .tool { min-width: 40px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; padding: 0 8px; }

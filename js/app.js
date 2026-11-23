@@ -317,9 +317,10 @@ function renderLesson() {
     <div class="stage">
       <div class="reader">
         <div class="tools">
-          <div class="dd btn-split"><button class="btn primary" data-a="play" id="play-btn">${ico('play')}استماع</button><button class="btn primary dd-caret" data-dd aria-haspopup="true" aria-expanded="false" aria-label="القارئ والتكرار">▾</button>
+          <div class="dd btn-split"><button class="btn primary" data-a="play" id="play-btn">${ico('play')}استماع</button><button class="btn primary dd-caret" data-dd aria-haspopup="true" aria-expanded="false" aria-label="القارئ والسرعة والتكرار"><span class="rate-badge" ${Player.rate === 1 ? 'hidden' : ''}>${rateLabel(Player.rate)}</span>▾</button>
             <div class="dd-menu dd-form" hidden>
               <label for="reciter">القارئ</label><select id="reciter">${RECITERS.map(r => `<option value="${r.id}" ${r.id === Player.reciter ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>
+              <span class="dd-lbl">سرعة التلاوة</span><div class="rate-seg" role="group" aria-label="سرعة التلاوة">${RATES.map(r => `<button class="${r === Player.rate ? 'on' : ''}" data-rate="${r}" aria-pressed="${r === Player.rate}">${rateLabel(r)}</button>`).join('')}</div>
               <label for="repeat">تكرار الآية</label><select id="repeat"><option value="1">بدون تكرار</option><option value="2">تكرار الآية ×٢</option><option value="3">تكرار الآية ×٣</option></select>
               <button class="btn" data-a="stop">${ico('stop')}إيقاف التلاوة</button>
             </div></div>
@@ -405,6 +406,7 @@ function wireLesson() {
   app().querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { L.tab = b.dataset.tab; app().querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b)); renderPanel(); });
   $('#reciter').onchange = e => { Player.reciter = e.target.value; store.set('iqra-reciter', Player.reciter); if (Player.playing) { const k = Player.queue[Player.idx]?.key; Player.play(Player.queue.filter(x => !x.basmala).map(x => x.key), k); } };
   $('#repeat').onchange = e => { Player.repeat = +e.target.value; };
+  app().querySelectorAll('[data-rate]').forEach(b => b.onclick = () => setRate(+b.dataset.rate));
   if (L.free) {
     $('#sura-pick').onchange = e => { const s = Q.sura(+e.target.value); L.freePage = s.page; afterFreePage(); };
     $('#page-pick').onchange = e => { L.freePage = Math.max(1, Math.min(604, +e.target.value || 1)); afterFreePage(); };
