@@ -59,6 +59,10 @@ const API = (() => {
     return role;
   }
   const MAX_NAMES = 80;
+  function progressRole(db, cred, section) {
+    if (!SECTIONS.some(s => s.id === section)) fail('شعبة غير معروفة');
+    return cred ? checkCred(db, cred, section) : 'class';
+  }
   const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   // the section records only today (and may correct it today); the principal can correct any day
   function dayCheck(db, cred, section, date) {
@@ -93,21 +97,32 @@ const API = (() => {
       save(); return { ok: true };
     },
     // progress of each section through the plan
+    // «أنهينا» needs no password on the class screen; a password, if sent, is still checked
     saveProgress({ cred, rec }) {
-      const db = load(); checkCred(db, cred, rec.section);
+      const db = load(); const role = progressRole(db, cred, rec.section);
       if (!rec.section || !rec.entryId) fail('بيانات التقدّم ناقصة');
       const status = rec.status === 'partial' ? 'partial' : 'done';
       const upto = status === 'partial' ? String(rec.upto || '') : '';
       if (status === 'partial' && !/^\d{1,3}:\d{1,3}$/.test(upto)) fail('حدّدي الآية التي وصلتِ إليها');
       let r = db.progress.find(x => x.section === rec.section && x.entryId === String(rec.entryId));
       if (!r) { r = {}; db.progress.push(r); }
-      Object.assign(r, { section: rec.section, entryId: String(rec.entryId), status, upto, at: new Date().toISOString(), by: cred.role });
+      Object.assign(r, { section: rec.section, entryId: String(rec.entryId), status, upto, at: new Date().toISOString(), by: role });
       save(); return { rec: { ...r } };
     },
     deleteProgress({ cred, section, entryId }) {
-      const db = load(); checkCred(db, cred, section);
+      const db = load(); progressRole(db, cred, section);
       db.progress = db.progress.filter(x => !(x.section === section && x.entryId === String(entryId)));
       save(); return { ok: true };
+    },
+    // the principal sets where a section really is
+    bulkProgress({ cred, section, remove = [], set = [] }) {
+      const db = load(); adminOnly(db, cred);
+      if (!SECTIONS.some(s => s.id === section)) fail('شعبة غير معروفة');
+      const rm = remove.map(String);
+      db.progress = db.progress.filter(x => !(x.section === section && rm.includes(x.entryId)));
+      save();
+      set.forEach(r => local.saveProgress({ cred, rec: { section, entryId: r.entryId, status: r.status, upto: r.upto } }));
+      return { progress: load().progress.filter(x => x.section === section).map(x => ({ ...x })) };
     },
     // student names (password-protected; never in bootstrap)
     getStudents({ cred, section }) {

@@ -711,14 +711,13 @@ function openProgress() {
   const sectionId = L.sectionId;
   const pr = progOf(sectionId, e.id);
   const keys = Q.keysOf(e.segs);
-  const needLogin = !S.admin && !S.sec[sectionId];
   const ov = modal(`<header><h2>${esc(Q.segLabel(e.segs))}</h2><button class="btn ghost" data-close aria-label="إغلاق">✕</button></header>
     ${pr ? `<p class="muted" style="margin:0">المسجّل الآن: <b>${pr.status === 'done' ? 'أنهينا المقطع كاملاً' : 'وصلنا إلى الآية ' + toAr(pr.upto.split(':')[1])}</b></p>` : ''}
     <button class="btn primary" id="p-done" style="min-height:58px;font-size:1.2rem">أنهينا المقطع كاملاً ✓</button>
     ${keys.length > 1 ? `<div class="field"><label for="p-upto">أو: وصلنا إلى الآية…</label>
       <div style="display:flex;gap:8px"><select id="p-upto" style="flex:1;min-height:50px">${keys.slice(0, -1).map(k => `<option value="${k}" ${pr && pr.upto === k ? 'selected' : ''}>${esc(Q.suraName(+k.split(':')[0]))} ${toAr(k.split(':')[1])}</option>`).join('')}</select>
       <button class="btn gold" id="p-part" style="min-height:50px">حفظ</button></div></div>` : ''}
-    ${needLogin ? `<div class="field"><label for="p-pw">كلمة مرور شعبة ${esc(sectionName(sectionId))}</label><input id="p-pw" type="password" inputmode="numeric" autocomplete="off">${API.demo ? '<span class="muted">في وضع التجربة: 1111</span>' : ''}</div>` : ''}
+    <div class="field" id="p-pwf" hidden><label for="p-pw">كلمة مرور شعبة ${esc(sectionName(sectionId))}</label><input id="p-pw" type="password" inputmode="numeric" autocomplete="off"></div>
     <div class="err-msg" id="p-err" hidden></div>
     ${pr ? '<button class="btn danger" id="p-undo">إلغاء التسجيل (ضُغط بالخطأ)</button>' : ''}`);
   // show the opening words of each ayah in the list
@@ -726,14 +725,20 @@ function openProgress() {
   if (sel) [...sel.options].forEach(async o => {
     try { const w = await Q.ayahWords(o.value); if (w.length) o.textContent += ': ' + Q.ayahText(w.slice(0, 4)) + '…'; } catch (err) { /* label stays short */ }
   });
-  const cred = () => S.admin || S.sec[sectionId] || { role: 'section', id: sectionId, pw: $('#p-pw', ov)?.value || '' };
+  // no password: the teacher just taps. (Only if the database still runs the older code that asks for one does the field appear.)
+  const pwf = $('#p-pwf', ov);
+  const cred = () => S.admin || S.sec[sectionId] || (!pwf.hidden ? { role: 'section', id: sectionId, pw: $('#p-pw', ov).value || '' } : null);
   const run = async (btn, fn) => {
     const c = cred(); btn.disabled = true;
     try {
       await fn(c);
-      if (c.role === 'section') { S.sec[sectionId] = c; store.sset('iqra-sec', S.sec); }
+      if (c && c.role === 'section') { S.sec[sectionId] = c; store.sset('iqra-sec', S.sec); }
       closeModal(); return true;
-    } catch (err) { const m = $('#p-err', ov); m.hidden = false; m.textContent = err.userMessage || 'تعذّر الحفظ'; btn.disabled = false; return false; }
+    } catch (err) {
+      const m = $('#p-err', ov); btn.disabled = false;
+      if (!c && /تسجيل الدخول/.test(err.userMessage || '')) { pwf.hidden = false; $('#p-pw', ov).focus(); m.hidden = false; m.textContent = 'أدخلي كلمة مرور الشعبة ثم اضغطي مرة أخرى.'; return false; }
+      m.hidden = false; m.textContent = err.userMessage || 'تعذّر الحفظ'; return false;
+    }
   };
   const put = rec => { S.progress = (S.progress || []).filter(r => !(r.section === rec.section && r.entryId === rec.entryId)); S.progress.push(rec); };
   $('#p-done', ov).onclick = async e2 => {
@@ -751,6 +756,64 @@ function openProgress() {
   if (pr) $('#p-undo', ov).onclick = async e2 => {
     const ok = await run(e2.currentTarget, async c => { await API.call('deleteProgress', { cred: c, section: sectionId, entryId: e.id }); S.progress = S.progress.filter(r => !(r.section === sectionId && r.entryId === e.id)); });
     if (ok) { toast('أُلغي التسجيل'); resetEntry(); }
+  };
+}
+
+/* ---------- the principal sets where a section really is ---------- */
+// works out the records for «the section has read up to s:a»: everything before is read, that segment is done or read in part
+function positionPlan(sectionId, key) {
+  const list = entries(sectionId.split('-')[0]);
+  const i = list.findIndex(e => isNewDay(e) && Q.keysOf(e.segs).includes(key));
+  if (i < 0) return null;
+  const segKeys = Q.keysOf(list[i].segs);
+  const chosen = key === segKeys[segKeys.length - 1] ? { entryId: list[i].id, status: 'done' } : { entryId: list[i].id, status: 'partial', upto: key };
+  const recs = (S.progress || []).filter(r => r.section === sectionId).map(r => ({ r, j: list.findIndex(e => e.id === r.entryId) }));
+  const remove = recs.filter(o => o.j >= i).map(o => o.r.entryId);
+  const kept = recs.filter(o => o.j >= 0 && o.j < i);
+  const set = [];
+  // segments between the first record and this one that are not marked read yet become read
+  if (kept.length) { const base = Math.min(...kept.map(o => o.j)); for (let j = base; j < i; j++) if (isNewDay(list[j]) && progOf(sectionId, list[j].id)?.status !== 'done') set.push({ entryId: list[j].id, status: 'done' }); }
+  set.push(chosen);
+  return { remove, set, entry: list[i] };
+}
+function setSectionPosition(sectionId, after) {
+  const list = entries(sectionId.split('-')[0]);
+  const keys = [...new Set(list.filter(isNewDay).flatMap(e => Q.keysOf(e.segs)))];
+  if (!keys.length) { toast('لا توجد مقاطع في خطة هذا الصف'); return; }
+  const suras = [...new Set(keys.map(k => +k.split(':')[0]))];
+  // start from where the site thinks the section is now
+  const st = sectionStatus(sectionId); const pe = st.pos >= 0 ? list[st.pos] : null; const pp = pe && progOf(sectionId, pe.id);
+  let cur = pp && pp.status === 'partial' ? pp.upto : pe ? keys[Math.max(0, keys.indexOf(Q.keysOf(pe.segs)[0]) - 1)] : keys[keys.length - 1];
+  const ov = modal(`<header><h2>📍 موضع ${esc(sectionName(sectionId))}</h2><button class="btn ghost" data-close aria-label="إغلاق">✕</button></header>
+    <p class="muted" style="margin:0">اختاري <b>آخر آية قرأتها الشعبة</b>. سيُعتبر ما قبلها مقروءاً، وتفتح الشعبة كل يوم من الآية التي بعدها.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><div class="field" style="flex:1;min-width:160px"><label for="sp-s">السورة</label><select id="sp-s">${suras.map(s => `<option value="${s}">${esc(Q.suraName(s))}</option>`).join('')}</select></div>
+      <div class="field" style="flex:1;min-width:160px"><label for="sp-a">الآية</label><select id="sp-a"></select></div></div>
+    <div class="warn-box" id="sp-prev"></div>
+    <div class="err-msg" id="sp-err" hidden></div>
+    <button class="btn primary" id="sp-save" style="min-height:54px">حفظ الموضع</button>`);
+  const S_ = $('#sp-s', ov), A_ = $('#sp-a', ov);
+  const fillAyahs = () => { const s = +S_.value; A_.innerHTML = keys.filter(k => +k.split(':')[0] === s).map(k => `<option value="${k}">${toAr(k.split(':')[1])}</option>`).join(''); };
+  // what the section will look like: next segment and how far behind
+  const preview = () => {
+    const plan = positionPlan(sectionId, A_.value); const box = $('#sp-prev', ov);
+    if (!plan) { box.textContent = 'هذه الآية ليست في مقاطع الخطة.'; return; }
+    const real = S.progress; const sim = real.filter(r => !(r.section === sectionId && plan.remove.includes(r.entryId)));
+    plan.set.forEach(x => { const k = sim.findIndex(r => r.section === sectionId && r.entryId === x.entryId); const rec = { section: sectionId, entryId: x.entryId, status: x.status, upto: x.upto || '', at: new Date().toISOString() }; if (k >= 0) sim[k] = rec; else sim.push(rec); });
+    S.progress = sim; const s2 = sectionStatus(sectionId); S.progress = real;
+    const next = s2.pos >= 0 ? list[s2.pos] : null; const np = next && plan.set.find(x => x.entryId === next.id && x.status === 'partial');
+    box.innerHTML = next ? `ستفتح الشعبة على: <b>${esc(Q.segLabel(next.segs))}</b>${np ? ` من الآية <b>${toAr(+np.upto.split(':')[1] + 1)}</b>` : ''}<br>${s2.lag ? `متأخرة ${lagWords(s2.lag)} عن الخطة` : 'ملتزمة بالخطة'}` : 'أنهت الشعبة كل مقاطع الخطة.';
+  };
+  S_.value = String(+cur.split(':')[0]); fillAyahs(); A_.value = cur; preview();
+  S_.onchange = () => { fillAyahs(); A_.selectedIndex = A_.options.length - 1; preview(); };
+  A_.onchange = preview;
+  $('#sp-save', ov).onclick = async e => {
+    const plan = positionPlan(sectionId, A_.value); if (!plan) return;
+    const btn = e.currentTarget; btn.disabled = true;
+    try {
+      const r = await API.call('bulkProgress', { cred: S.admin, section: sectionId, remove: plan.remove, set: plan.set.map(({ entryId, status, upto }) => ({ entryId, status, upto })) });
+      S.progress = (S.progress || []).filter(x => x.section !== sectionId).concat(r.progress);
+      closeModal(); toast(`حُفظ موضع ${sectionName(sectionId)}`); after && after();
+    } catch (err) { const m = $('#sp-err', ov); m.hidden = false; m.textContent = err.userMessage || 'تعذّر الحفظ'; btn.disabled = false; }
   };
 }
 
@@ -1091,11 +1154,13 @@ function adminTrack() {
     const sabr = scoredEntries(grade).filter(e => e.type === 'sabr' && e.date && e.date <= t).map(e => ({ e, r: recOf(id, e.id) })).filter(o => o.r).slice(-12);
     const max = Math.max(1, ...sabr.map(o => +o.r.count || 0));
     body.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" data-back>→ ملخص ${esc(gradeOf(grade).name)}</button><h3 style="margin:0">${TRACK_COLORS[x.color][0]} ${esc(sectionName(id))}</h3>
-      <span class="chip">${x.tracked ? (x.lag ? 'متأخرة ' + lagWords(x.lag) : 'ملتزمة') : 'لم تبدأ تسجيل «أنهينا»'}</span>${x.pct != null ? `<span class="chip">الإنجاز ${toAr(x.pct)}٪</span>` : ''}</div>
+      <span class="chip">${x.tracked ? (x.lag ? 'متأخرة ' + lagWords(x.lag) : 'ملتزمة') : 'لم تبدأ تسجيل «أنهينا»'}</span>${x.pct != null ? `<span class="chip">الإنجاز ${toAr(x.pct)}٪</span>` : ''}
+      ${list.some(isNewDay) ? '<button class="btn gold" data-setpos style="margin-inline-start:auto">📍 تحديد موضع الشعبة</button>' : ''}</div>
       <div class="trk-detail"><div class="card"><h3 style="margin-top:0">أخطاء السبر عبر الأسابيع</h3>
         ${sabr.length ? `<div class="bars">${sabr.map(o => `<div class="barrow"><span class="muted" style="font-size:.85rem">${shortDate(o.e.date)}</span><div class="track"><div class="fill" style="width:${Math.max(3, (+o.r.count || 0) / max * 100)}%"></div></div><b class="num">${toAr(o.r.count)}</b></div>`).join('')}</div>` : '<p class="muted">لا توجد أخطاء سبر مسجّلة بعد.</p>'}</div>
       <div class="table-wrap"><table><thead><tr><th>اليوم</th><th>النوع</th><th>المقطع</th><th>الحالة</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">لا توجد أيام بعد.</td></tr>'}</tbody></table></div></div>`;
     body.querySelector('[data-back]').onclick = () => open(grade, null);
+    body.querySelector('[data-setpos]')?.addEventListener('click', () => setSectionPosition(id, () => drawSection(body)));
   }
   draw();
 }

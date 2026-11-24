@@ -108,8 +108,9 @@ function handle_(req) {
   });
   // تقدّم الشعب في الخطة
   if (a === 'saveProgress') return withLock_(() => saveProgress_(req));
+  if (a === 'bulkProgress') return withLock_(() => bulkProgress_(req));
   if (a === 'deleteProgress') return withLock_(() => {
-    check_(req.cred, req.section);
+    progressRole_(req.cred, req.section);
     const data = rows_('Progress');
     const i = data.findIndex(r => String(r[0]) === String(req.section) && String(r[1]) === String(req.entryId));
     if (i >= 0) ss_().getSheetByName('Progress').deleteRow(i + 2);
@@ -225,9 +226,28 @@ function saveAdhkar_(req) {
 }
 
 /* ---------- التقدّم ---------- */
+// «أنهينا» needs no password on the class screen (the teacher just taps it). A password, if sent, is still checked.
+function validSection_(id) { return GRADE_IDS.some(g => LETTERS.some(l => g + '-' + l === String(id))); }
+function progressRole_(cred, section) {
+  if (!validSection_(section)) fail_('شعبة غير معروفة');
+  return cred ? check_(cred, section) : 'class';
+}
+// the principal sets where a section really is: remove some records and set others, in one go
+function bulkProgress_(req) {
+  adminOnly_(req.cred);
+  if (!validSection_(req.section)) fail_('شعبة غير معروفة');
+  const sec = String(req.section);
+  const remove = (req.remove || []).map(String), set = req.set || [];
+  const sh = sheet_('Progress', PROGRESS_COLS);
+  const data = rows_('Progress');
+  for (let i = data.length - 1; i >= 0; i--) if (String(data[i][0]) === sec && remove.indexOf(String(data[i][1])) >= 0) sh.deleteRow(i + 2);
+  set.forEach(r => saveProgress_({ cred: req.cred, rec: { section: sec, entryId: r.entryId, status: r.status, upto: r.upto } }));
+  const at_ = v => v instanceof Date ? v.toISOString() : String(v || '');
+  return { progress: rows_('Progress').filter(r => String(r[0]) === sec).map(r => ({ section: sec, entryId: String(r[1]), status: String(r[2]), upto: String(r[3] || ''), at: at_(r[4]), by: String(r[5] || '') })) };
+}
 function saveProgress_(req) {
   const r = req.rec || {};
-  check_(req.cred, r.section);
+  const role = progressRole_(req.cred, r.section);
   if (!r.section || !r.entryId) fail_('بيانات التقدّم ناقصة');
   const status = r.status === 'partial' ? 'partial' : 'done';
   const upto = status === 'partial' ? String(r.upto || '') : '';
@@ -236,11 +256,11 @@ function saveProgress_(req) {
   const data = rows_('Progress');
   const i = data.findIndex(x => String(x[0]) === String(r.section) && String(x[1]) === String(r.entryId));
   const at = new Date();
-  const row = [String(r.section), String(r.entryId), status, upto, at, req.cred.role];
+  const row = [String(r.section), String(r.entryId), status, upto, at, role];
   const rowNo = i >= 0 ? i + 2 : sh.getLastRow() + 1;
   sh.getRange(rowNo, 1, 1, 4).setNumberFormat('@');
   sh.getRange(rowNo, 1, 1, row.length).setValues([row]);
-  return { rec: { section: row[0], entryId: row[1], status, upto, at: at.toISOString(), by: req.cred.role } };
+  return { rec: { section: row[0], entryId: row[1], status, upto, at: at.toISOString(), by: role } };
 }
 
 /* ---------- أسماء الطالبات ---------- */
